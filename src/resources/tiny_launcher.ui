@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model 
+    href="https://gitlab.gnome.org/GNOME/gtk/-/raw/main/tools/gtk4builder.rng?ref_type=heads" 
+    schematypens="http://relaxng.org/ns/structure/1.0"?>
+<interface>
+    <object class="GtkApplicationWindow" id="main_window">
+        <property name="title">Tiny Launcher</property>
+        <property name="default-width">400</property>
+        <property name="default-height">400</property>
+        <child>
+            <object class="GtkBox" id="label">
+                <property name="orientation">GTK_ORIENTATION_VERTICAL</property>
+                <child>
+                    <object class="GtkSearchEntry" id="search_entry">
+                        <property name="placeholder-text">Buscar...</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkScrolledWindow">
+                        <property name="vexpand">true</property>
+                        <child>
+                            <object class="GtkListBox" id="list_box">
+                                <property name="selection-mode">GTK_SELECTION_BROWSE</property>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
+        </child>
+    </object>
+</interface>

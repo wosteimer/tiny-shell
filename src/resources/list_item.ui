@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model 
+    href="https://gitlab.gnome.org/GNOME/gtk/-/raw/main/tools/gtk4builder.rng?ref_type=heads" 
+    schematypens="http://relaxng.org/ns/structure/1.0"?>
+<interface>
+    <template class="TsListItem" parent="GtkListBoxRow">
+        <child>
+            <object class="GtkBox">
+                <child>
+                    <object class="GtkImage" id="icon" />
+                </child>
+                <child>
+                    <object class="GtkLabel" id="name" />
+                </child>
+            </object>
+        </child>
+    </template>
+</interface>

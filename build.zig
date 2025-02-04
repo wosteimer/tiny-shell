@@ -39,9 +39,11 @@ pub fn build(b: *std.Build) void {
     tiny_launcher.addIncludePath(b.path("src/resources"));
     // tiny_launcher.linkLibrary(lib);
     tiny_launcher.linkLibC();
+    tiny_launcher.linkSystemLibrary("libadwaita-1");
     tiny_launcher.linkSystemLibrary("gtk4");
     tiny_launcher.linkSystemLibrary("gtk4-layer-shell");
     tiny_launcher.linkSystemLibrary("gio-unix-2.0");
+    tiny_launcher.linkSystemLibrary("gobject-2.0");
     b.installArtifact(tiny_launcher);
 
     const tiny_launcher_cmd = b.addRunArtifact(tiny_launcher);
@@ -74,4 +76,14 @@ pub fn build(b: *std.Build) void {
     // const test_step = b.step("test", "Run unit tests");
     // test_step.dependOn(&run_lib_unit_tests.step);
     // test_step.dependOn(&run_exe_unit_tests.step);
+    const gobject_unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/example-person.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    gobject_unit_tests.linkLibC();
+    gobject_unit_tests.linkSystemLibrary("gobject-2.0");
+    const run_gobject_unit_tests = b.addRunArtifact(gobject_unit_tests);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_gobject_unit_tests.step);
 }

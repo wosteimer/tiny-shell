@@ -3,8 +3,10 @@ const c = @cImport({
     @cInclude("gtk/gtk.h");
     @cInclude("gtk4-layer-shell/gtk4-layer-shell.h");
     @cInclude("gio/gdesktopappinfo.h");
+    @cInclude("adwaita.h");
 });
-const list_item = @import("list_item.zig");
+const TsLauncherWindow = @import("ts-launcher-window.zig").TsLauncherWindow;
+const list_item = @import("ts-list-item.zig");
 
 fn onSearchChanged(search_entry: *c.GtkSearchEntry, builder: *c.GtkBuilder) callconv(.C) void {
     const text = c.gtk_editable_get_text(@ptrCast(search_entry));
@@ -29,22 +31,22 @@ fn onSearchChanged(search_entry: *c.GtkSearchEntry, builder: *c.GtkBuilder) call
     c.gtk_list_box_select_row(@ptrCast(list_box), c.gtk_list_box_get_row_at_index(@ptrCast(list_box), 0));
 }
 
+pub fn onActivate(_: *c.GtkListBox, list_row: *list_item.TsListItem, _: c.gpointer) callconv(.C) void {
+    list_row.launch();
+}
+
 fn activate(app: *c.GtkApplication, data: c.gpointer) callconv(.C) void {
-    std.debug.assert(c.gtk_layer_is_supported() != 0);
     _ = data;
-    const builder = c.gtk_builder_new_from_resource("/com/github/wosteimer/tiny-launcher/tiny_launcher.ui");
-    const window: *c.GtkWindow = @ptrCast(c.gtk_builder_get_object(builder, "main_window"));
-    const search_entry: *c.GtkSearchEntry = @ptrCast(c.gtk_builder_get_object(builder, "search_entry"));
-    _ = c.g_signal_connect_data(search_entry, "search-changed", @ptrCast(&onSearchChanged), builder, null, 0);
+    const window: *c.GtkWindow = @ptrCast(TsLauncherWindow.new());
+    c.gtk_window_set_application(window, app);
     c.gtk_layer_init_for_window(window);
     c.gtk_layer_set_layer(window, c.GTK_LAYER_SHELL_LAYER_TOP);
     c.gtk_layer_set_keyboard_mode(window, c.GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND);
-    c.gtk_window_set_application(window, app);
     c.gtk_window_present(window);
 }
 
 pub fn main() !void {
-    const app = c.gtk_application_new(
+    const app = c.adw_application_new(
         "com.github.wosteimer.tiny-launcher",
         c.G_APPLICATION_DEFAULT_FLAGS,
     );

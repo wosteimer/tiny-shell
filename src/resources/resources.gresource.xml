@@ -1,6 +1,6 @@
 <gresources>
     <gresource prefix="/com/github/wosteimer/tiny-launcher">
-        <file compressed="true">tiny_launcher.ui</file>
-        <file compressed="true">list_item.ui</file>
+        <file compressed="true">ts-launcher-window.ui</file>
+        <file compressed="true">ts-list-item.ui</file>
     </gresource>
 </gresources>

@@ -7,24 +7,23 @@ pub const TsListItem = struct {
     parent: c.GtkListBoxRow,
     name: *c.GtkLabel,
     icon: *c.GtkImage,
+    app_info: *c.GAppInfo,
 
     var g_type: c.GType = undefined;
     const Self = @This();
 
     fn classInit(class: *c.GtkWidgetClass) callconv(.C) void {
         @as(*c.GObjectClass, @alignCast(@ptrCast(class))).*.dispose = @ptrCast(&dispose);
-        c.gtk_widget_class_set_template_from_resource(class, "/com/github/wosteimer/tiny-launcher/list_item.ui");
+        c.gtk_widget_class_set_template_from_resource(class, "/com/github/wosteimer/tiny-launcher/ts-list-item.ui");
         c.gtk_widget_class_bind_template_child_full(class, "name", 0, @offsetOf(TsListItem, "name"));
         c.gtk_widget_class_bind_template_child_full(class, "icon", 0, @offsetOf(TsListItem, "icon"));
     }
 
     fn dispose(self: *Self) callconv(.C) void {
         c.gtk_widget_dispose_template(@ptrCast(self), g_type);
-        if (c.g_type_class_peek(c.gtk_list_box_row_get_type())) |parent_class| {
-            const parent_g_object_class: *c.GObjectClass = @alignCast(@ptrCast(parent_class));
-            if (parent_g_object_class.dispose) |parent_dispose| {
-                parent_dispose(@ptrCast(self));
-            }
+        const parent_class = c.g_type_class_peek(c.gtk_list_box_row_get_type());
+        if (@as(*c.GObjectClass, @alignCast(@ptrCast(parent_class))).*.dispose) |parent_dispose| {
+            parent_dispose(@ptrCast(self));
         }
     }
 
@@ -32,8 +31,8 @@ pub const TsListItem = struct {
         c.gtk_widget_init_template(@ptrCast(self));
     }
 
-    fn onActivate(_: *Self, app_info: *c.GAppInfo) callconv(.C) void {
-        _ = c.g_app_info_launch(app_info, null, null, null);
+    pub fn launch(self: *Self) callconv(.C) void {
+        _ = c.g_app_info_launch(self.app_info, null, null, null);
     }
 
     pub fn new(app_info: *c.GAppInfo) callconv(.C) *Self {
@@ -41,18 +40,22 @@ pub const TsListItem = struct {
             g_type = register();
         }
         const self: *TsListItem = @alignCast(@ptrCast(c.g_object_new(g_type, null)));
+        self.app_info = app_info;
         const app_name = c.g_app_info_get_name(app_info);
         const app_icon = c.g_app_info_get_icon(app_info);
-        c.gtk_label_set_label(self.name, app_name);
-        c.gtk_image_set_from_gicon(self.icon, app_icon);
-        _ = c.g_signal_connect_data(
-            @ptrCast(self),
-            "activate",
-            @ptrCast(&onActivate),
-            @ptrCast(app_info),
-            null,
+        const display = c.gdk_display_get_default();
+        const icon_theme = c.gtk_icon_theme_get_for_display(display);
+        const icon = c.gtk_icon_theme_lookup_by_gicon(
+            icon_theme,
+            app_icon,
+            24,
+            1,
+            c.GTK_TEXT_DIR_NONE,
             0,
         );
+        defer c.g_object_unref(icon);
+        c.gtk_label_set_label(self.name, app_name);
+        c.gtk_image_set_from_paintable(self.icon, @ptrCast(icon));
         return self;
     }
 

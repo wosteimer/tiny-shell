@@ -3,27 +3,43 @@ const c = @cImport({
     @cInclude("gtk/gtk.h");
 });
 
+pub const TsListItemClass = struct { parent: c.GtkListBoxRowClass };
+
 pub const TsListItem = struct {
+    const Self = @This();
+    var G_TYPE: c.GType = undefined;
+
     parent: c.GtkListBoxRow,
     name: *c.GtkLabel,
     icon: *c.GtkImage,
     app_info: *c.GAppInfo,
 
-    var g_type: c.GType = undefined;
-    const Self = @This();
+    fn classInit(class: *TsListItemClass) callconv(.C) void {
+        toGObjectClass(class).*.dispose = @ptrCast(&dispose);
+        toGObjectClass(class).*.finalize = @ptrCast(&finalize);
+        c.gtk_widget_class_set_template_from_resource(@ptrCast(class), "/com/github/wosteimer/tiny-launcher/ts-list-item.ui");
+        c.gtk_widget_class_bind_template_child_full(@ptrCast(class), "name", 0, @offsetOf(TsListItem, "name"));
+        c.gtk_widget_class_bind_template_child_full(@ptrCast(class), "icon", 0, @offsetOf(TsListItem, "icon"));
+    }
 
-    fn classInit(class: *c.GtkWidgetClass) callconv(.C) void {
-        @as(*c.GObjectClass, @alignCast(@ptrCast(class))).*.dispose = @ptrCast(&dispose);
-        c.gtk_widget_class_set_template_from_resource(class, "/com/github/wosteimer/tiny-launcher/ts-list-item.ui");
-        c.gtk_widget_class_bind_template_child_full(class, "name", 0, @offsetOf(TsListItem, "name"));
-        c.gtk_widget_class_bind_template_child_full(class, "icon", 0, @offsetOf(TsListItem, "icon"));
+    fn toGObjectClass(class: *anyopaque) *c.GObjectClass {
+        return @as(*c.GObjectClass, @alignCast(@ptrCast(class)));
+    }
+
+    fn getParentClass() *c.GtkListBoxRowClass {
+        return @alignCast(@ptrCast(c.g_type_class_peek(c.gtk_list_box_row_get_type())));
     }
 
     fn dispose(self: *Self) callconv(.C) void {
-        c.gtk_widget_dispose_template(@ptrCast(self), g_type);
-        const parent_class = c.g_type_class_peek(c.gtk_list_box_row_get_type());
-        if (@as(*c.GObjectClass, @alignCast(@ptrCast(parent_class))).*.dispose) |parent_dispose| {
+        c.gtk_widget_dispose_template(@ptrCast(self), G_TYPE);
+        if (toGObjectClass(getParentClass()).*.dispose) |parent_dispose| {
             parent_dispose(@ptrCast(self));
+        }
+    }
+
+    fn finalize(self: *Self) callconv(.C) void {
+        if (toGObjectClass(getParentClass()).*.finalize) |parent_finalize| {
+            parent_finalize(@ptrCast(self));
         }
     }
 
@@ -36,10 +52,8 @@ pub const TsListItem = struct {
     }
 
     pub fn new(app_info: *c.GAppInfo) callconv(.C) *Self {
-        if (g_type == 0) {
-            g_type = register();
-        }
-        const self: *TsListItem = @alignCast(@ptrCast(c.g_object_new(g_type, null)));
+        register();
+        const self: *TsListItem = @alignCast(@ptrCast(c.g_object_new(G_TYPE, null)));
         self.app_info = app_info;
         const app_name = c.g_app_info_get_name(app_info);
         const app_icon = c.g_app_info_get_icon(app_info);
@@ -59,15 +73,16 @@ pub const TsListItem = struct {
         return self;
     }
 
-    fn register() c.GType {
-        return c.g_type_register_static_simple(
+    fn register() void {
+        if (G_TYPE != 0) return;
+        G_TYPE = c.g_type_register_static_simple(
             c.gtk_list_box_row_get_type(),
             "TsListItem",
-            @sizeOf(c.GtkListBoxRowClass),
+            @sizeOf(TsListItemClass),
             @ptrCast(&classInit),
             @sizeOf(TsListItem),
             @ptrCast(&init),
-            0,
+            c.G_TYPE_FLAG_FINAL,
         );
     }
 };

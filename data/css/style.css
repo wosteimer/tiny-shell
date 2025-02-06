@@ -1,0 +1,72 @@
+.ts-main {
+    border-radius: 12px;
+    background-color: var(--window-bg-color);
+    border: 1px solid var(--border-color);
+    box-shadow: 0px 8px 16px 4px rgba(1, 0, 0, 0.2);
+}
+
+window {
+    background-color: transparent;
+}
+
+.ts-header {
+    padding: 20px 20px 16px 20px;
+}
+
+.ts-header entry {
+    min-height: 36px;
+    border-radius: 18px;
+    border: 1px solid var(--border-color);
+    padding: 0 12px 0 20px;
+    margin-right: 8px;
+}
+
+.ts-header entry image:last-child {
+    margin: 0;
+    padding: 0;
+}
+
+.ts-header entry image {
+    margin: 0;
+    padding: 0 14px 0 0;
+}
+
+button,
+list {
+    background-color: transparent;
+}
+
+.ts-header button {
+    padding: 0;
+    margin: 0;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 16px;
+}
+
+button:hover {
+    background-color: var(--border-color);
+}
+
+list {
+    padding: 0 20px;
+}
+
+row {
+    padding: 0 0 0 12px;
+    min-height: 72px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+row:hover {
+    border: 1px solid var(--border-color);
+}
+
+row:selected {
+    border: 2px solid color-mix(in srgb, var(--accent-bg-color), transparent);
+}
+
+box>image {
+    padding: 0 12px 0 0;
+}

@@ -17,7 +17,7 @@ pub const TsListItem = struct {
     fn classInit(class: *TsListItemClass) callconv(.C) void {
         toGObjectClass(class).*.dispose = @ptrCast(&dispose);
         toGObjectClass(class).*.finalize = @ptrCast(&finalize);
-        c.gtk_widget_class_set_template_from_resource(@ptrCast(class), "/com/github/wosteimer/tiny-launcher/ts-list-item.ui");
+        c.gtk_widget_class_set_template_from_resource(@ptrCast(class), "/com/github/wosteimer/tiny/launcher/ui/ts-list-item.ui");
         c.gtk_widget_class_bind_template_child_full(@ptrCast(class), "name", 0, @offsetOf(TsListItem, "name"));
         c.gtk_widget_class_bind_template_child_full(@ptrCast(class), "icon", 0, @offsetOf(TsListItem, "icon"));
     }
@@ -62,7 +62,7 @@ pub const TsListItem = struct {
         const icon = c.gtk_icon_theme_lookup_by_gicon(
             icon_theme,
             app_icon,
-            24,
+            32,
             1,
             c.GTK_TEXT_DIR_NONE,
             0,

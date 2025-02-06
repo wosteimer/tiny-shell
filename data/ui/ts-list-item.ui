@@ -7,7 +7,9 @@
         <child>
             <object class="GtkBox">
                 <child>
-                    <object class="GtkImage" id="icon" />
+                    <object class="GtkImage" id="icon">
+                        <property name="icon-size">GTK_ICON_SIZE_LARGE</property>
+                    </object>
                 </child>
                 <child>
                     <object class="GtkLabel" id="name" />

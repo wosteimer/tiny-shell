@@ -1,4 +1,4 @@
 .zig-cache/
 zig-out/
-src/resources/*.c
-src/resources/*.h
+data/*.c
+data/*.h

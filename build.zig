@@ -17,16 +17,16 @@ pub fn build(b: *std.Build) void {
     const gen_resources_header = b.addSystemCommand(&.{
         "glib-compile-resources",
         "--generate-header",
-        "resources.gresource.xml",
+        "data.gresource.xml",
     });
-    gen_resources_header.setCwd(b.path("src/resources")); // Define o diretório de trabalho
+    gen_resources_header.setCwd(b.path("data"));
 
     const gen_resources_source = b.addSystemCommand(&.{
         "glib-compile-resources",
         "--generate-source",
-        "resources.gresource.xml",
+        "data.gresource.xml",
     });
-    gen_resources_source.setCwd(b.path("src/resources"));
+    gen_resources_source.setCwd(b.path("data"));
     gen_resources_source.step.dependOn(&gen_resources_header.step);
 
     const tiny_launcher = b.addExecutable(.{
@@ -35,8 +35,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    tiny_launcher.addCSourceFile(.{ .file = b.path("src/resources/resources.c") });
-    tiny_launcher.addIncludePath(b.path("src/resources"));
+    tiny_launcher.addCSourceFile(.{ .file = b.path("data/data.c") });
+    tiny_launcher.addIncludePath(b.path("data"));
     // tiny_launcher.linkLibrary(lib);
     tiny_launcher.linkLibC();
     tiny_launcher.linkSystemLibrary("libadwaita-1");
@@ -76,14 +76,15 @@ pub fn build(b: *std.Build) void {
     // const test_step = b.step("test", "Run unit tests");
     // test_step.dependOn(&run_lib_unit_tests.step);
     // test_step.dependOn(&run_exe_unit_tests.step);
-    const gobject_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/example-person.zig"),
+    const tsmodel_unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/ts-model.zig"),
         .target = target,
         .optimize = optimize,
     });
-    gobject_unit_tests.linkLibC();
-    gobject_unit_tests.linkSystemLibrary("gobject-2.0");
-    const run_gobject_unit_tests = b.addRunArtifact(gobject_unit_tests);
+    tsmodel_unit_tests.linkLibC();
+    tsmodel_unit_tests.linkSystemLibrary("gobject-2.0");
+    tsmodel_unit_tests.linkSystemLibrary("gio-unix-2.0");
+    const run_tsmodel_unit_tests = b.addRunArtifact(tsmodel_unit_tests);
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_gobject_unit_tests.step);
+    test_step.dependOn(&run_tsmodel_unit_tests.step);
 }

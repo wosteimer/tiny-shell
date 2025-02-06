@@ -5,14 +5,25 @@
 <interface>
     <template class="TsLauncherWindow" parent="AdwApplicationWindow">
         <property name="title">Tiny Launcher</property>
-        <property name="default-width">400</property>
-        <property name="default-height">400</property>
+        <property name="default-width">464</property>
+        <property name="default-height">464</property>
         <property name="content">
             <object class="AdwToolbarView">
+                <property name="width-request">400</property>
+                <property name="height-request">400</property>
+                <property name="valign">GTK_ALIGN_CENTER</property>
+                <property name="halign">GTK_ALIGN_CENTER</property>
+                <style>
+                    <class name="ts-main" />
+                </style>
                 <child type="top">
                     <object class="GtkBox">
+                        <style>
+                            <class name="ts-header" />
+                        </style>
                         <child>
                             <object class="GtkSearchEntry" id="search_entry">
+                                <property name="valign">GTK_ALIGN_CENTER</property>
                                 <signal
                                     name="search-changed"
                                     handler="onSearchChanged"
@@ -25,6 +36,7 @@
                         </child>
                         <child>
                             <object class="GtkButton">
+                                <property name="valign">GTK_ALIGN_CENTER</property>
                                 <child>
                                     <object class="GtkImage">
                                         <property name="icon-name">view-more</property>

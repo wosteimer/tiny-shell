@@ -5,6 +5,7 @@ const c = @cImport({
     @cInclude("adwaita.h");
 });
 const TsListItem = @import("ts-list-item.zig").TsListItem;
+const TsModel = @import("ts-model.zig").TsModel;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
@@ -13,7 +14,7 @@ pub const TsLauncherWindow = struct {
     parent: c.AdwApplicationWindow,
     search_entry: *c.GtkSearchEntry,
     list_box: *c.GtkListBox,
-    model: ?*c.GListStore,
+    model: *TsModel,
 
     var G_TYPE: c.GType = undefined;
     const Self = @This();
@@ -23,7 +24,7 @@ pub const TsLauncherWindow = struct {
         @as(*c.GObjectClass, @alignCast(@ptrCast(class))).*.finalize = @ptrCast(&finalize);
         c.gtk_widget_class_set_template_from_resource(
             class,
-            "/com/github/wosteimer/tiny-launcher/ts-launcher-window.ui",
+            "/com/github/wosteimer/tiny/launcher/ui/ts-launcher-window.ui",
         );
         c.gtk_widget_class_bind_template_child_full(class, "search_entry", 0, @offsetOf(
             TsLauncherWindow,
@@ -42,6 +43,11 @@ pub const TsLauncherWindow = struct {
             class,
             "onSearchChanged",
             @ptrCast(&onSearchChanged),
+        );
+        c.gtk_widget_class_bind_template_callback_full(
+            class,
+            "onActivate",
+            @ptrCast(&onActivate),
         );
     }
 
@@ -65,9 +71,15 @@ pub const TsLauncherWindow = struct {
 
     fn init(self: *Self) callconv(.C) void {
         c.gtk_widget_init_template(@ptrCast(self));
-        self.model = c.g_list_store_new(c.g_app_info_get_type());
-        c.gtk_list_box_bind_model(self.list_box, @ptrCast(self.model), @ptrCast(&TsListItem.new), null, null);
-        self.showAllApps();
+        self.model = TsModel.new(allocator) catch @panic("out of memory");
+        c.gtk_list_box_bind_model(
+            self.list_box,
+            @ptrCast(self.model),
+            @ptrCast(&TsListItem.new),
+            null,
+            null,
+        );
+        //self.showAllApps();
     }
 
     fn lessThan(_: void, first: ?*c.GAppInfo, second: ?*c.GAppInfo) bool {
@@ -76,25 +88,14 @@ pub const TsLauncherWindow = struct {
         return std.mem.order(u8, first_name, second_name) == .lt;
     }
 
-    fn showAllApps(self: *Self) void {
-        var app_info = c.g_app_info_get_all();
-        defer c.g_list_free_full(app_info, c.g_object_unref);
-        var buf = std.ArrayList(?*c.GAppInfo).init(allocator);
-        defer buf.deinit();
-        while (app_info != null) : (app_info = app_info.*.next) {
-            if (c.g_app_info_should_show(@ptrCast(app_info.*.data)) == 0) {
-                continue;
-            }
-            buf.append(@ptrCast(app_info.*.data)) catch @panic("out of memory");
-        }
-        std.mem.sort(?*c.GAppInfo, buf.items, {}, lessThan);
-        c.g_list_store_splice(
-            self.model,
-            0,
-            c.g_list_model_get_n_items(@ptrCast(self.model)),
-            @ptrCast(buf.items),
-            @intCast(buf.items.len),
-        );
+    fn onActivate(self: *Self, list_box: *c.GtkListBox) callconv(.C) bool {
+        std.debug.print("hello\n", .{});
+        const selected = c.gtk_list_box_get_selected_row(list_box);
+        const pos: u32 = @intCast(c.gtk_list_box_row_get_index(selected));
+        const app_info: *c.GAppInfo = @ptrCast(c.g_list_model_get_item(@ptrCast(self.model), pos));
+        defer c.g_object_unref(@ptrCast(app_info));
+        _ = c.g_app_info_launch(app_info, null, null, null);
+        return false;
     }
 
     fn onKeyPressed(
@@ -106,6 +107,9 @@ pub const TsLauncherWindow = struct {
     ) callconv(.C) bool {
         if (keyval == c.GDK_KEY_Escape) {
             c.gtk_window_close(@ptrCast(self));
+        }
+        if (keyval == c.GDK_KEY_Return) {
+            return false;
         }
         const editable: *c.GtkEditable = @ptrCast(self.search_entry);
         const char = c.gdk_keyval_to_unicode(keyval);
@@ -121,39 +125,14 @@ pub const TsLauncherWindow = struct {
         return false;
     }
 
-    fn onSearchChanged(self: *Self, entry: *c.GtkSearchEntry) callconv(.C) void {
-        const text: []const u8 = std.mem.span(c.gtk_editable_get_text(@ptrCast(entry)));
-        if (text.len == 0) {
-            self.showAllApps();
-            return;
-        }
-        var buf = std.ArrayList(?*c.GDesktopAppInfo).init(allocator);
-        defer buf.deinit();
-        const result = c.g_desktop_app_info_search(@ptrCast(text));
-        defer c.g_free(@ptrCast(result));
-        var i: usize = 0;
-        while (result[i] != null) : (i += 1) {
-            var j: usize = 0;
-            defer c.g_strfreev(result[i]);
-            while (result[i][j] != null) : (j += 1) {
-                const app_id = result[i][j];
-                const app_info = c.g_desktop_app_info_new(app_id);
-                if (c.g_app_info_should_show(@ptrCast(app_info)) == 0) continue;
-                buf.append(app_info) catch @panic("out memory");
-            }
-        }
-        c.g_strfreev(result[i]);
-        c.g_list_store_splice(
-            self.model,
-            0,
-            c.g_list_model_get_n_items(@ptrCast(self.model)),
-            @ptrCast(buf.items),
-            @intCast(buf.items.len),
-        );
+    fn onSearchChanged(self: *Self, entry: *c.GtkSearchEntry) callconv(.C) bool {
+        const filter: []const u8 = std.mem.span(c.gtk_editable_get_text(@ptrCast(entry)));
+        self.model.setFilter(filter) catch @panic("out of memory");
         c.gtk_list_box_select_row(
             @ptrCast(self.list_box),
             c.gtk_list_box_get_row_at_index(@ptrCast(self.list_box), 0),
         );
+        return false;
     }
 
     pub fn new() callconv(.C) *Self {

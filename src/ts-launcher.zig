@@ -6,6 +6,23 @@ const c = @cImport({
 });
 const TsLauncherWindow = @import("ts-launcher-window.zig").TsLauncherWindow;
 
+pub fn main() !void {
+    const app = c.adw_application_new(
+        "com.github.wosteimer.tiny-launcher",
+        c.G_APPLICATION_DEFAULT_FLAGS,
+    );
+    defer c.g_object_unref(app);
+    _ = c.g_signal_connect_data(
+        @ptrCast(app),
+        "activate",
+        @ptrCast(&activate),
+        null,
+        null,
+        c.G_TYPE_FLAG_FINAL,
+    );
+    _ = c.g_application_run(@ptrCast(app), 0, null);
+}
+
 fn activate(app: *c.GtkApplication, _: c.gpointer) callconv(.C) void {
     const css_provider = c.gtk_css_provider_new();
     const display = c.gdk_display_get_default();
@@ -24,21 +41,10 @@ fn activate(app: *c.GtkApplication, _: c.gpointer) callconv(.C) void {
     c.gtk_layer_set_layer(window, c.GTK_LAYER_SHELL_LAYER_TOP);
     c.gtk_layer_set_keyboard_mode(window, c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE);
     c.gtk_window_present(window);
-}
-
-pub fn main() !void {
-    const app = c.adw_application_new(
-        "com.github.wosteimer.tiny-launcher",
-        c.G_APPLICATION_DEFAULT_FLAGS,
-    );
-    defer c.g_object_unref(app);
-    _ = c.g_signal_connect_data(
-        @ptrCast(app),
-        "activate",
-        @ptrCast(&activate),
-        null,
-        null,
-        c.G_TYPE_FLAG_FINAL,
-    );
-    _ = c.g_application_run(@ptrCast(app), 0, null);
+    const native = c.gtk_widget_get_native(@ptrCast(window));
+    const surface = c.gtk_native_get_surface(native);
+    const monitor = c.gdk_display_get_monitor_at_surface(display, surface);
+    var rect = c.GdkRectangle{};
+    c.gdk_monitor_get_geometry(monitor, &rect);
+    c.gtk_window_set_default_size(@ptrCast(window), rect.width, rect.height);
 }

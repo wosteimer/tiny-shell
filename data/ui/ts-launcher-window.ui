@@ -4,11 +4,19 @@
     schematypens="http://relaxng.org/ns/structure/1.0"?>
 <interface>
     <template class="TsLauncherWindow" parent="AdwApplicationWindow">
+        <child>
+            <object class="GtkGestureClick">
+                <signal name="released" handler="onMouseReleased" swapped="true" />
+            </object>
+        </child>
+        <child>
+            <object class="GtkEventControllerKey">
+                <signal name="key-pressed" handler="onKeyPressed" swapped="true" />
+            </object>
+        </child>
         <property name="title">Tiny Launcher</property>
-        <property name="default-width">464</property>
-        <property name="default-height">464</property>
         <property name="content">
-            <object class="AdwToolbarView">
+            <object class="AdwToolbarView" id="main">
                 <property name="width-request">400</property>
                 <property name="height-request">400</property>
                 <property name="valign">GTK_ALIGN_CENTER</property>
@@ -43,7 +51,7 @@
                                 <property name="valign">GTK_ALIGN_CENTER</property>
                                 <child>
                                     <object class="GtkImage">
-                                        <property name="icon-name">view-more</property>
+                                        <property name="icon-name">open-menu-symbolic</property>
                                     </object>
                                 </child>
                             </object>
@@ -72,10 +80,5 @@
                 </property>
             </object>
         </property>
-        <child>
-            <object class="GtkEventControllerKey">
-                <signal name="key-pressed" handler="onKeyPressed" swapped="true" />
-            </object>
-        </child>
     </template>
 </interface>

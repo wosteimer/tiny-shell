@@ -31,22 +31,25 @@ window {
     padding: 0 14px 0 0;
 }
 
-button,
-list {
-    background-color: transparent;
-}
 
 .ts-header button {
     padding: 0;
     margin: 0;
     min-width: 32px;
     min-height: 32px;
-    border-radius: 16px;
+    border-radius: 4px;
 }
 
-button:hover {
+
+.ts-header button:hover {
     background-color: var(--border-color);
 }
+
+button,
+list {
+    background-color: transparent;
+}
+
 
 list {
     padding: 0 20px;

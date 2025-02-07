@@ -21,6 +21,7 @@ pub const TsLauncherWindowClass = struct {
 
 pub const TsLauncherWindow = struct {
     parent: c.AdwApplicationWindow,
+    main: *c.AdwToolbarView,
     search_entry: *c.GtkSearchEntry,
     list_box: *c.GtkListBox,
     scrolled_window: *c.GtkScrolledWindow,
@@ -38,21 +39,27 @@ pub const TsLauncherWindow = struct {
         );
         c.gtk_widget_class_bind_template_child_full(
             toGtkWindgetClass(class),
+            "main",
+            0,
+            @offsetOf(Self, "main"),
+        );
+        c.gtk_widget_class_bind_template_child_full(
+            toGtkWindgetClass(class),
             "search_entry",
             0,
-            @offsetOf(TsLauncherWindow, "search_entry"),
+            @offsetOf(Self, "search_entry"),
         );
         c.gtk_widget_class_bind_template_child_full(
             toGtkWindgetClass(class),
             "list_box",
             0,
-            @offsetOf(TsLauncherWindow, "list_box"),
+            @offsetOf(Self, "list_box"),
         );
         c.gtk_widget_class_bind_template_child_full(
             toGtkWindgetClass(class),
             "scrolled_window",
             0,
-            @offsetOf(TsLauncherWindow, "scrolled_window"),
+            @offsetOf(Self, "scrolled_window"),
         );
         c.gtk_widget_class_bind_template_callback_full(
             toGtkWindgetClass(class),
@@ -68,6 +75,11 @@ pub const TsLauncherWindow = struct {
             toGtkWindgetClass(class),
             "onActivated",
             @ptrCast(&onActivated),
+        );
+        c.gtk_widget_class_bind_template_callback_full(
+            toGtkWindgetClass(class),
+            "onMouseReleased",
+            @ptrCast(&onMouseReleased),
         );
     }
 
@@ -231,6 +243,18 @@ pub const TsLauncherWindow = struct {
         c.gtk_list_box_select_row(@ptrCast(self.list_box), row);
         const adjustment = c.gtk_scrolled_window_get_vadjustment(self.scrolled_window);
         c.gtk_adjustment_set_value(adjustment, 0);
+        return false;
+    }
+
+    fn onMouseReleased(self: *Self, _: i32, x: f64, y: f64, _: *c.GtkGestureClick) callconv(.C) bool {
+        var rect = c.graphene_rect_t{};
+        _ = c.gtk_widget_compute_bounds(@alignCast(@ptrCast(self.main)), @ptrCast(self), &rect);
+        if (!c.graphene_rect_contains_point(
+            &rect,
+            &c.graphene_point_t{ .x = @floatCast(x), .y = @floatCast(y) },
+        )) {
+            c.gtk_window_close(@ptrCast(self));
+        }
         return false;
     }
 

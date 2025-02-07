@@ -23,14 +23,18 @@
                         </style>
                         <child>
                             <object class="GtkSearchEntry" id="search_entry">
-                                <property name="valign">GTK_ALIGN_CENTER</property>
+                                <signal
+                                    name="activate"
+                                    handler="onActivated"
+                                    swapped="true"
+                                />
                                 <signal
                                     name="search-changed"
                                     handler="onSearchChanged"
                                     swapped="true"
                                 />
+                                <property name="valign">GTK_ALIGN_CENTER</property>
                                 <property name="placeholder-text">Buscar...</property>
-                                <property name="activates-default">true</property>
                                 <property name="hexpand">true</property>
                             </object>
                         </child>
@@ -50,11 +54,16 @@
                     <object class="GtkBox">
                         <property name="orientation">GTK_ORIENTATION_VERTICAL</property>
                         <child>
-                            <object class="GtkScrolledWindow">
+                            <object class="GtkScrolledWindow" id="scrolled_window">
                                 <property name="vexpand">true</property>
                                 <child>
                                     <object class="GtkListBox" id="list_box">
                                         <property name="selection-mode">GTK_SELECTION_BROWSE</property>
+                                        <signal
+                                            name="row-activated"
+                                            handler="onActivated"
+                                            swapped="true"
+                                        />
                                     </object>
                                 </child>
                             </object>

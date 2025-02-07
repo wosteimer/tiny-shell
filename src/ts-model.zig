@@ -21,7 +21,16 @@ pub const TsModel = struct {
     }
 
     fn getParentClass() *c.GObjectClass {
-        return @as(*c.GObjectClass, @alignCast(@ptrCast(c.g_type_class_peek(c.g_object_get_type()))));
+        return @as(
+            *c.GObjectClass,
+            @alignCast(
+                @ptrCast(
+                    c.g_type_class_peek(
+                        c.g_object_get_type(),
+                    ),
+                ),
+            ),
+        );
     }
 
     fn interfaceInit(interface: *c.GListModelInterface) callconv(.C) void {

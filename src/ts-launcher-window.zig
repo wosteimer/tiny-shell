@@ -10,6 +10,11 @@ const TsModel = @import("ts-model.zig").TsModel;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
+pub const MoveSelectionDirection = enum(i32) {
+    PREVIOUS = -1,
+    NEXT = 1,
+};
+
 pub const TsLauncherWindowClass = struct {
     parent_class: c.AdwApplicationWindowClass,
 };
@@ -149,12 +154,34 @@ pub const TsLauncherWindow = struct {
         return true;
     }
 
+    fn nextShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
+        window.moveSelection(.NEXT);
+        return true;
+    }
+
+    fn previousShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
+        window.moveSelection(.PREVIOUS);
+        return true;
+    }
+
+    pub fn moveSelection(self: *Self, direction: MoveSelectionDirection) void {
+        const row = c.gtk_list_box_get_selected_row(@ptrCast(self.list_box));
+        const index = c.gtk_list_box_row_get_index(row);
+        const n_rows = c.g_list_model_get_n_items(@ptrCast(self.model));
+        const next = c.gtk_list_box_get_row_at_index(
+            self.list_box,
+            wrap(index + @intFromEnum(direction), 0, @intCast(n_rows)),
+        );
+        c.gtk_list_box_select_row(self.list_box, next);
+        self.scrollToSelection();
+    }
+
     fn wrap(value: i32, min_value: i32, max_value: i32) i32 {
         const range_size = max_value - min_value;
         return @mod((value - min_value), range_size) + min_value;
     }
 
-    fn ajustScroll(self: *Self) void {
+    pub fn scrollToSelection(self: *Self) void {
         const row = c.gtk_list_box_get_selected_row(@ptrCast(self.list_box));
         var rect = c.graphene_rect_t{};
         _ = c.gtk_widget_compute_bounds(@ptrCast(row), @alignCast(@ptrCast(self.scrolled_window)), &rect);
@@ -168,32 +195,6 @@ pub const TsLauncherWindow = struct {
         } else if (top < 0) {
             c.gtk_adjustment_set_value(adjustment, current + top);
         }
-    }
-
-    fn nextShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
-        const row = c.gtk_list_box_get_selected_row(@ptrCast(window.list_box));
-        const index = c.gtk_list_box_row_get_index(row);
-        const n_rows = c.g_list_model_get_n_items(@ptrCast(window.model));
-        const next = c.gtk_list_box_get_row_at_index(
-            window.list_box,
-            wrap(index + 1, 0, @intCast(n_rows)),
-        );
-        c.gtk_list_box_select_row(window.list_box, next);
-        window.ajustScroll();
-        return true;
-    }
-
-    fn previousShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
-        const row = c.gtk_list_box_get_selected_row(@ptrCast(window.list_box));
-        const index = c.gtk_list_box_row_get_index(row);
-        const n_rows = c.g_list_model_get_n_items(@ptrCast(window.model));
-        const next = c.gtk_list_box_get_row_at_index(
-            window.list_box,
-            wrap(index - 1, 0, @intCast(n_rows)),
-        );
-        c.gtk_list_box_select_row(window.list_box, next);
-        window.ajustScroll();
-        return true;
     }
 
     fn onActivated(self: *Self, _: *c.GObject) callconv(.C) bool {

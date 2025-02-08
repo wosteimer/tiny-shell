@@ -1,37 +1,25 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("gio/gio.h");
-    @cInclude("gio/gdesktopappinfo.h");
-});
+const c = @import("c.zig");
+const g = @import("g-utils.zig");
+
+pub const TS_MODEL = g.makeInstanceCaster(&TsModel.getType, TsModel);
+
+pub const tsModelParentClass = g.makeClassPeeker(
+    @ptrCast(&c.g_object_get_type),
+    c.GObjectClass,
+);
 
 pub const TsModelClass = struct { parent_class: c.GObjectClass };
 
 pub const TsModel = struct {
     const Self = @This();
-    var G_TYPE: u64 = undefined;
+    var g_type: u64 = undefined;
 
     parent: c.GObject,
     infos: std.StringHashMap(*c.GAppInfo),
     allocator: std.mem.Allocator,
     current: std.ArrayList([]const u8),
     default: std.ArrayList([]const u8),
-
-    fn toGObjectClass(class: ?*anyopaque) *c.GObjectClass {
-        return @as(*c.GObjectClass, @alignCast(@ptrCast(class)));
-    }
-
-    fn getParentClass() *c.GObjectClass {
-        return @as(
-            *c.GObjectClass,
-            @alignCast(
-                @ptrCast(
-                    c.g_type_class_peek(
-                        c.g_object_get_type(),
-                    ),
-                ),
-            ),
-        );
-    }
 
     fn interfaceInit(interface: *c.GListModelInterface) callconv(.C) void {
         interface.*.get_item = @ptrCast(&getItem);
@@ -40,29 +28,32 @@ pub const TsModel = struct {
     }
 
     fn classInit(class: *TsModelClass) callconv(.C) void {
-        toGObjectClass(class).*.dispose = @ptrCast(&dispose);
-        toGObjectClass(class).*.finalize = @ptrCast(&finalize);
+        g.G_OBJECT_CLASS(class).*.dispose = @ptrCast(&dispose);
+        g.G_OBJECT_CLASS(class).*.finalize = @ptrCast(&finalize);
     }
 
-    fn dispose(self: *Self) callconv(.C) void {
-        if (getParentClass().*.dispose) |parent_dispose| {
-            parent_dispose(@ptrCast(self));
+    fn dispose(gobject: *c.GObject) callconv(.C) void {
+        const parent_class = g.G_OBJECT_CLASS(tsModelParentClass());
+        if (parent_class.*.dispose) |parent_dispose| {
+            parent_dispose(gobject);
         }
     }
 
-    fn finalize(self: *Self) callconv(.C) void {
+    fn finalize(gobject: *c.GObject) callconv(.C) void {
+        const parent_class = g.G_OBJECT_CLASS(tsModelParentClass());
+        const self = TS_MODEL(gobject);
         for (self.current.items) |app_id| {
             self.allocator.free(app_id);
         }
         var iter = self.infos.iterator();
         while (iter.next()) |app_info| {
-            c.g_object_unref(@ptrCast(app_info.value_ptr.*));
+            c.g_object_unref(g.G_APP_INFO(app_info.value_ptr.*));
         }
         self.infos.deinit();
         self.default.deinit();
         self.current.deinit();
-        if (getParentClass().*.finalize) |parent_finalize| {
-            parent_finalize(@ptrCast(self));
+        if (parent_class.*.finalize) |parent_finalize| {
+            parent_finalize(gobject);
         }
     }
 
@@ -71,7 +62,7 @@ pub const TsModel = struct {
     fn getItem(self: *Self, pos: u64) callconv(.C) *c.GAppInfo {
         const app_id = self.current.items[pos];
         const app_info = self.infos.get(app_id) orelse @panic("invalid app_id");
-        return @ptrCast(c.g_object_ref(@ptrCast(app_info)));
+        return g.G_APP_INFO(c.g_object_ref(g.G_OBJECT(app_info)));
     }
 
     fn getItemType(_: *Self) callconv(.C) c.GType {
@@ -83,8 +74,7 @@ pub const TsModel = struct {
     }
 
     pub fn new(allocator: std.mem.Allocator) !*Self {
-        register();
-        const self: *Self = @alignCast(@ptrCast(c.g_object_new(G_TYPE, null)));
+        const self: *Self = @alignCast(@ptrCast(c.g_object_new(getType(), null)));
         self.allocator = allocator;
         try initData(self, allocator);
         return self;
@@ -95,8 +85,12 @@ pub const TsModel = struct {
         defer c.g_object_unref(@ptrCast(first_app_info));
         const second_app_info = c.g_desktop_app_info_new(@ptrCast(second));
         defer c.g_object_unref(@ptrCast(second_app_info));
-        const first_name = std.mem.span(c.g_app_info_get_name(@ptrCast(first_app_info)));
-        const second_name = std.mem.span(c.g_app_info_get_name(@ptrCast(second_app_info)));
+        const first_name = std.mem.span(
+            c.g_app_info_get_name(@ptrCast(first_app_info)),
+        );
+        const second_name = std.mem.span(
+            c.g_app_info_get_name(@ptrCast(second_app_info)),
+        );
         return std.mem.order(u8, first_name, second_name) == .lt;
     }
 
@@ -119,9 +113,9 @@ pub const TsModel = struct {
         try self.setFilter("");
     }
 
-    fn register() void {
-        if (G_TYPE != 0) return;
-        G_TYPE = c.g_type_register_static_simple(
+    pub fn getType() c.GType {
+        if (g_type != 0) return g_type;
+        g_type = c.g_type_register_static_simple(
             c.g_object_get_type(),
             "TsModel",
             @sizeOf(TsModelClass),
@@ -135,7 +129,12 @@ pub const TsModel = struct {
             .interface_data = null,
             .interface_finalize = null,
         };
-        c.g_type_add_interface_static(G_TYPE, c.g_list_model_get_type(), &interface_info);
+        c.g_type_add_interface_static(
+            g_type,
+            c.g_list_model_get_type(),
+            &interface_info,
+        );
+        return g_type;
     }
 
     pub fn setFilter(self: *Self, filter: []const u8) !void {
@@ -151,7 +150,7 @@ pub const TsModel = struct {
                 try self.current.append(app_id);
             }
             const added: u32 = @intCast(self.current.items.len);
-            c.g_list_model_items_changed(@ptrCast(self), 0, removed, added);
+            c.g_list_model_items_changed(g.G_LIST_MODEL(self), 0, removed, added);
             return;
         }
         const result = c.g_desktop_app_info_search(@ptrCast(filter));
@@ -164,8 +163,8 @@ pub const TsModel = struct {
                 const buf = result[i][j];
                 const len = std.mem.len(buf);
                 const app_info = c.g_desktop_app_info_new(buf);
-                defer c.g_object_unref(@ptrCast(app_info));
-                if (c.g_app_info_should_show(@ptrCast(app_info)) == 0) continue;
+                defer c.g_object_unref(g.G_OBJECT(app_info));
+                if (c.g_app_info_should_show(g.G_APP_INFO(app_info)) == 0) continue;
                 const app_id = try self.allocator.alloc(u8, len);
                 @memcpy(app_id, std.mem.span(buf));
                 try self.current.append(app_id);
@@ -173,7 +172,7 @@ pub const TsModel = struct {
         }
         c.g_strfreev(result[i]);
         const added: u32 = @intCast(self.current.items.len);
-        c.g_list_model_items_changed(@ptrCast(self), 0, removed, added);
+        c.g_list_model_items_changed(g.G_LIST_MODEL(self), 0, removed, added);
     }
 };
 

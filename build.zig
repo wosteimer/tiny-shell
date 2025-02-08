@@ -29,7 +29,6 @@ pub fn build(b: *std.Build) void {
     ts_launcher.linkSystemLibrary("gtk4");
     ts_launcher.linkSystemLibrary("gtk4-layer-shell");
     ts_launcher.linkSystemLibrary("gio-unix-2.0");
-    ts_launcher.linkSystemLibrary("gobject-2.0");
     b.installArtifact(ts_launcher);
     const ts_launcher_cmd = b.addRunArtifact(ts_launcher);
     ts_launcher_cmd.step.dependOn(&gen_resources_source.step);
@@ -44,7 +43,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     ts_model_unit_tests.linkLibC();
-    ts_model_unit_tests.linkSystemLibrary("gobject-2.0");
+    ts_model_unit_tests.linkSystemLibrary("libadwaita-1");
+    ts_model_unit_tests.linkSystemLibrary("gtk4");
+    ts_model_unit_tests.linkSystemLibrary("gtk4-layer-shell");
     ts_model_unit_tests.linkSystemLibrary("gio-unix-2.0");
     const run_ts_model_unit_tests = b.addRunArtifact(ts_model_unit_tests);
     const test_step = b.step("test", "Run unit tests");

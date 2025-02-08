@@ -1,18 +1,26 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("gtk/gtk.h");
-    @cInclude("gio/gdesktopappinfo.h");
-    @cInclude("adwaita.h");
-});
+const c = @import("c.zig");
+const g = @import("g-utils.zig");
+
 const TsListItem = @import("ts-list-item.zig").TsListItem;
 const TsModel = @import("ts-model.zig").TsModel;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
+const TS_LAUNHER_WINDOW = g.makeInstanceCaster(
+    TsLauncherWindow.getType,
+    TsLauncherWindow,
+);
+
+pub const tsLauncherWindowParentClass = g.makeClassPeeker(
+    @ptrCast(&c.adw_application_window_get_type),
+    c.AdwApplicationWindowClass,
+);
+
 pub const MoveSelectionDirection = enum(i32) {
-    PREVIOUS = -1,
-    NEXT = 1,
+    previous = -1,
+    next = 1,
 };
 
 pub const TsLauncherWindowClass = struct {
@@ -20,106 +28,64 @@ pub const TsLauncherWindowClass = struct {
 };
 
 pub const TsLauncherWindow = struct {
+    var g_type: c.GType = undefined;
+    const Self = @This();
     parent: c.AdwApplicationWindow,
+    model: *TsModel,
     main: *c.AdwToolbarView,
     search_entry: *c.GtkSearchEntry,
     list_box: *c.GtkListBox,
     scrolled_window: *c.GtkScrolledWindow,
-    model: *TsModel,
-
-    var G_TYPE: c.GType = undefined;
-    const Self = @This();
 
     fn classInit(class: *TsLauncherWindowClass) callconv(.C) void {
-        toObjectClass(class).*.dispose = @ptrCast(&dispose);
-        toObjectClass(class).*.finalize = @ptrCast(&finalize);
+        g.G_OBJECT_CLASS(class).*.dispose = @ptrCast(&dispose);
+        g.G_OBJECT_CLASS(class).*.finalize = @ptrCast(&finalize);
         c.gtk_widget_class_set_template_from_resource(
-            toGtkWindgetClass(class),
+            g.GTK_WIDGET_CLASS(class),
             "/com/github/wosteimer/tiny/launcher/ui/ts-launcher-window.ui",
         );
-        c.gtk_widget_class_bind_template_child_full(
-            toGtkWindgetClass(class),
-            "main",
-            0,
-            @offsetOf(Self, "main"),
-        );
-        c.gtk_widget_class_bind_template_child_full(
-            toGtkWindgetClass(class),
-            "search_entry",
-            0,
-            @offsetOf(Self, "search_entry"),
-        );
-        c.gtk_widget_class_bind_template_child_full(
-            toGtkWindgetClass(class),
-            "list_box",
-            0,
-            @offsetOf(Self, "list_box"),
-        );
-        c.gtk_widget_class_bind_template_child_full(
-            toGtkWindgetClass(class),
-            "scrolled_window",
-            0,
-            @offsetOf(Self, "scrolled_window"),
-        );
-        c.gtk_widget_class_bind_template_callback_full(
-            toGtkWindgetClass(class),
-            "onKeyPressed",
-            @ptrCast(&onKeyPressed),
-        );
-        c.gtk_widget_class_bind_template_callback_full(
-            toGtkWindgetClass(class),
-            "onSearchChanged",
-            @ptrCast(&onSearchChanged),
-        );
-        c.gtk_widget_class_bind_template_callback_full(
-            toGtkWindgetClass(class),
-            "onActivated",
-            @ptrCast(&onActivated),
-        );
-        c.gtk_widget_class_bind_template_callback_full(
-            toGtkWindgetClass(class),
-            "onMouseReleased",
-            @ptrCast(&onMouseReleased),
-        );
-    }
-
-    fn getParentClass() *c.AdwApplicationWindowClass {
-        return @as(
-            *c.AdwApplicationWindowClass,
-            @alignCast(
-                @ptrCast(
-                    c.g_type_class_peek(
-                        c.adw_application_window_get_type(),
-                    ),
-                ),
-            ),
-        );
-    }
-
-    fn toObjectClass(class: *anyopaque) *c.GObjectClass {
-        return @as(*c.GObjectClass, @alignCast(@ptrCast(class)));
-    }
-
-    fn toGtkWindgetClass(class: *anyopaque) *c.GtkWidgetClass {
-        return @as(*c.GtkWidgetClass, @alignCast(@ptrCast(class)));
-    }
-
-    fn dispose(self: *Self) callconv(.C) void {
-        c.gtk_widget_dispose_template(@ptrCast(self), G_TYPE);
-        if (toObjectClass(getParentClass()).*.dispose) |parent_dispose| {
-            parent_dispose(@ptrCast(self));
+        inline for (@typeInfo(Self).Struct.fields) |field| {
+            const name = field.name;
+            if (std.mem.eql(u8, name, "parent")) comptime continue;
+            if (std.mem.eql(u8, name, "model")) comptime continue;
+            c.gtk_widget_class_bind_template_child_full(
+                g.GTK_WIDGET_CLASS(class),
+                name,
+                0,
+                @offsetOf(Self, name),
+            );
         }
-        c.g_object_unref(self.model);
+        inline for (@typeInfo(Self).Struct.decls) |decl| {
+            const name = decl.name;
+            if (!std.mem.startsWith(u8, name, "on")) comptime continue;
+            if (!std.ascii.isUpper(name[2])) comptime continue;
+            c.gtk_widget_class_bind_template_callback_full(
+                g.GTK_WIDGET_CLASS(class),
+                name,
+                @ptrCast(&@field(Self, name)),
+            );
+        }
     }
 
-    fn finalize(self: *Self) callconv(.C) void {
-        if (toObjectClass(getParentClass()).*.finalize) |parent_finalize| {
-            parent_finalize(@ptrCast(self));
+    fn dispose(gobject: *c.GObject) callconv(.C) void {
+        const self = TS_LAUNHER_WINDOW(gobject);
+        const parent_class = g.G_OBJECT_CLASS(tsLauncherWindowParentClass());
+        c.gtk_widget_dispose_template(g.GTK_WIDGET(gobject), Self.getType());
+        c.g_object_unref(g.G_OBJECT(self.model));
+        if (parent_class.*.dispose) |parent_dispose| {
+            parent_dispose(gobject);
+        }
+    }
+
+    fn finalize(gobject: *c.GObject) callconv(.C) void {
+        const parent_class = g.G_OBJECT_CLASS(tsLauncherWindowParentClass());
+        if (parent_class.*.finalize) |parent_finalize| {
+            parent_finalize(gobject);
         }
     }
 
     fn init(self: *Self) callconv(.C) void {
-        c.gtk_widget_init_template(@ptrCast(self));
+        c.gtk_widget_init_template(g.GTK_WIDGET(self));
         self.model = TsModel.new(allocator) catch @panic("out of memory");
         c.gtk_list_box_bind_model(
             self.list_box,
@@ -129,57 +95,73 @@ pub const TsLauncherWindow = struct {
             null,
         );
         const shortcut_controller = c.gtk_shortcut_controller_new();
-        const text = c.gtk_editable_get_delegate(@ptrCast(self.search_entry));
-        c.gtk_widget_add_controller(@alignCast(@ptrCast(text)), shortcut_controller);
-        const close_shortcut = c.gtk_shortcut_new(
-            c.gtk_shortcut_trigger_parse_string("Escape"),
-            c.gtk_callback_action_new(@ptrCast(&closeShortcut), @ptrCast(self), null),
-        );
-        c.gtk_shortcut_controller_add_shortcut(@ptrCast(shortcut_controller), close_shortcut);
-        const confirm_shortcut = c.gtk_shortcut_new(
-            c.gtk_shortcut_trigger_parse_string("<Control>y"),
-            c.gtk_callback_action_new(@ptrCast(&confirmShortcut), @ptrCast(self), null),
-        );
-        c.gtk_shortcut_controller_add_shortcut(@ptrCast(shortcut_controller), confirm_shortcut);
-        const next_shortcut = c.gtk_shortcut_new(
-            c.gtk_shortcut_trigger_parse_string("<Control>n"),
-            c.gtk_callback_action_new(@ptrCast(&nextShortcut), @ptrCast(self), null),
-        );
-        c.gtk_shortcut_controller_add_shortcut(@ptrCast(shortcut_controller), next_shortcut);
-        const previous_shortcut = c.gtk_shortcut_new(
-            c.gtk_shortcut_trigger_parse_string("<Control>p"),
-            c.gtk_callback_action_new(@ptrCast(&previousShortcut), @ptrCast(self), null),
-        );
-        c.gtk_shortcut_controller_add_shortcut(@ptrCast(shortcut_controller), previous_shortcut);
+        const text = c.gtk_editable_get_delegate(g.GTK_EDITABLE(self.search_entry));
+        c.gtk_widget_add_controller(g.GTK_WIDGET(text), shortcut_controller);
+        const shortcuts = .{
+            .{ "Escape", &closeShortcut },
+            .{ "<Control>y", &confirmShortcut },
+            .{ "<Control>n", &nextShortcut },
+            .{ "<Control>p", &previousShortcut },
+        };
+        inline for (shortcuts) |shortcut_data| {
+            const shortcut = c.gtk_shortcut_new(
+                c.gtk_shortcut_trigger_parse_string(shortcut_data[0]),
+                c.gtk_callback_action_new(
+                    @ptrCast(shortcut_data[1]),
+                    @ptrCast(self),
+                    null,
+                ),
+            );
+            c.gtk_shortcut_controller_add_shortcut(
+                @ptrCast(shortcut_controller),
+                shortcut,
+            );
+        }
         const row = c.gtk_list_box_get_row_at_index(@ptrCast(self.list_box), 0);
-        c.gtk_list_box_select_row(@ptrCast(self.list_box), row);
-        _ = c.gtk_widget_grab_focus(@alignCast(@ptrCast(text)));
+        c.gtk_list_box_select_row(self.list_box, row);
+        _ = c.gtk_widget_grab_focus(g.GTK_WIDGET(text));
     }
 
-    fn confirmShortcut(widget: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
-        _ = onActivated(window, @ptrCast(widget));
+    fn confirmShortcut(
+        widget: *c.GtkWidget,
+        _: *c.GVariant,
+        window: *Self,
+    ) callconv(.C) bool {
+        _ = onActivated(window, g.G_OBJECT(widget));
         return true;
     }
 
-    fn closeShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
-        c.gtk_window_close(@ptrCast(window));
+    fn closeShortcut(
+        _: *c.GtkWidget,
+        _: *c.GVariant,
+        window: *Self,
+    ) callconv(.C) bool {
+        c.gtk_window_close(g.GTK_WINDOW(window));
         return true;
     }
 
-    fn nextShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
-        window.moveSelection(.NEXT);
+    fn nextShortcut(
+        _: *c.GtkWidget,
+        _: *c.GVariant,
+        window: *Self,
+    ) callconv(.C) bool {
+        window.moveSelection(.next);
         return true;
     }
 
-    fn previousShortcut(_: *c.GtkWidget, _: *c.GVariant, window: *Self) callconv(.C) bool {
-        window.moveSelection(.PREVIOUS);
+    fn previousShortcut(
+        _: *c.GtkWidget,
+        _: *c.GVariant,
+        window: *Self,
+    ) callconv(.C) bool {
+        window.moveSelection(.previous);
         return true;
     }
 
     pub fn moveSelection(self: *Self, direction: MoveSelectionDirection) void {
-        const row = c.gtk_list_box_get_selected_row(@ptrCast(self.list_box));
+        const row = c.gtk_list_box_get_selected_row(self.list_box);
         const index = c.gtk_list_box_row_get_index(row);
-        const n_rows = c.g_list_model_get_n_items(@ptrCast(self.model));
+        const n_rows = c.g_list_model_get_n_items(g.G_LIST_MODEL(self.model));
         const next = c.gtk_list_box_get_row_at_index(
             self.list_box,
             wrap(index + @intFromEnum(direction), 0, @intCast(n_rows)),
@@ -194,12 +176,18 @@ pub const TsLauncherWindow = struct {
     }
 
     pub fn scrollToSelection(self: *Self) void {
-        const row = c.gtk_list_box_get_selected_row(@ptrCast(self.list_box));
+        const row = c.gtk_list_box_get_selected_row(self.list_box);
         var rect = c.graphene_rect_t{};
-        _ = c.gtk_widget_compute_bounds(@ptrCast(row), @alignCast(@ptrCast(self.scrolled_window)), &rect);
+        _ = c.gtk_widget_compute_bounds(
+            g.GTK_WIDGET(row),
+            g.GTK_WIDGET(self.scrolled_window),
+            &rect,
+        );
         const top = rect.origin.y;
         const bottom = top + rect.size.height;
-        const adjustment = c.gtk_scrolled_window_get_vadjustment(self.scrolled_window);
+        const adjustment = c.gtk_scrolled_window_get_vadjustment(
+            self.scrolled_window,
+        );
         const page_size = c.gtk_adjustment_get_page_size(adjustment);
         const current = c.gtk_adjustment_get_value(adjustment);
         if (bottom > page_size) {
@@ -209,63 +197,79 @@ pub const TsLauncherWindow = struct {
         }
     }
 
-    fn onActivated(self: *Self, _: *c.GObject) callconv(.C) bool {
+    pub fn onActivated(self: *Self, _: *c.GObject) callconv(.C) bool {
         if (c.gtk_list_box_get_selected_row(self.list_box)) |selected| {
             const pos: u32 = @intCast(c.gtk_list_box_row_get_index(selected));
-            const app_info: *c.GAppInfo = @ptrCast(c.g_list_model_get_item(@ptrCast(self.model), pos));
+            const app_info: *c.GAppInfo = g.G_APP_INFO(
+                c.g_list_model_get_item(g.G_LIST_MODEL(self.model), pos),
+            );
             defer c.g_object_unref(@ptrCast(app_info));
             _ = c.g_app_info_launch(app_info, null, null, null);
-            c.gtk_window_close(@ptrCast(self));
+            c.gtk_window_close(g.GTK_WINDOW(self));
         }
         return true;
     }
 
-    fn onKeyPressed(
+    pub fn onKeyPressed(
         self: *Self,
         _: u32,
         _: u32,
         _: c.GdkModifierType,
         controller: *c.GtkEventControllerKey,
     ) callconv(.C) bool {
-        const text = c.gtk_editable_get_delegate(@ptrCast(self.search_entry));
-        _ = c.gtk_widget_grab_focus(@alignCast(@ptrCast(text)));
+        const text = c.gtk_editable_get_delegate(g.GTK_EDITABLE(self.search_entry));
+        _ = c.gtk_widget_grab_focus(g.GTK_WIDGET(text));
         _ = c.gtk_event_controller_key_forward(
-            @ptrCast(controller),
-            @alignCast(@ptrCast(text)),
+            controller,
+            g.GTK_WIDGET(text),
         );
         return false;
     }
 
-    fn onSearchChanged(self: *Self, entry: *c.GtkSearchEntry) callconv(.C) bool {
-        const filter: []const u8 = std.mem.span(c.gtk_editable_get_text(@ptrCast(entry)));
+    pub fn onSearchChanged(
+        self: *Self,
+        entry: *c.GtkSearchEntry,
+    ) callconv(.C) bool {
+        const filter = std.mem.span(c.gtk_editable_get_text(g.GTK_EDITABLE(entry)));
         self.model.setFilter(filter) catch @panic("out of memory");
-        const row = c.gtk_list_box_get_row_at_index(@ptrCast(self.list_box), 0);
-        c.gtk_list_box_select_row(@ptrCast(self.list_box), row);
-        const adjustment = c.gtk_scrolled_window_get_vadjustment(self.scrolled_window);
+        const row = c.gtk_list_box_get_row_at_index(self.list_box, 0);
+        c.gtk_list_box_select_row(self.list_box, row);
+        const adjustment = c.gtk_scrolled_window_get_vadjustment(
+            self.scrolled_window,
+        );
         c.gtk_adjustment_set_value(adjustment, 0);
         return false;
     }
 
-    fn onMouseReleased(self: *Self, _: i32, x: f64, y: f64, _: *c.GtkGestureClick) callconv(.C) bool {
+    pub fn onMouseReleased(
+        self: *Self,
+        _: i32,
+        x: f64,
+        y: f64,
+        _: *c.GtkGestureClick,
+    ) callconv(.C) bool {
         var rect = c.graphene_rect_t{};
-        _ = c.gtk_widget_compute_bounds(@alignCast(@ptrCast(self.main)), @ptrCast(self), &rect);
+        _ = c.gtk_widget_compute_bounds(
+            g.GTK_WIDGET(self.main),
+            g.GTK_WIDGET(self),
+            &rect,
+        );
         if (!c.graphene_rect_contains_point(
             &rect,
             &c.graphene_point_t{ .x = @floatCast(x), .y = @floatCast(y) },
         )) {
-            c.gtk_window_close(@ptrCast(self));
+            c.gtk_window_close(g.GTK_WINDOW(self));
         }
         return false;
     }
 
     pub fn new() callconv(.C) *Self {
-        register();
-        return @alignCast(@ptrCast(c.g_object_new(G_TYPE, null)));
+        return TS_LAUNHER_WINDOW(c.g_object_new(Self.getType(), null));
     }
 
-    fn register() void {
-        if (G_TYPE != 0) return;
-        G_TYPE = c.g_type_register_static_simple(
+    pub fn getType() c.GType {
+        if (g_type != 0) return g_type;
+        g_type = c.g_type_register_static_simple(
             c.adw_application_window_get_type(),
             "TsLauncherWindow",
             @sizeOf(TsLauncherWindowClass),
@@ -274,5 +278,6 @@ pub const TsLauncherWindow = struct {
             @ptrCast(&init),
             c.G_TYPE_FLAG_FINAL,
         );
+        return g_type;
     }
 };

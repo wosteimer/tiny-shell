@@ -1,10 +1,14 @@
 const std = @import("std");
 const c = @import("c.zig");
 const TsLauncherWindow = @import("ts-launcher-window.zig").TsLauncherWindow;
+const TS_LAUNCHER_WINDOW = @import("ts-launcher-window.zig").TS_LAUNCHER_WINDOW;
+
+const APP_ID = "com.github.wosteimer.tiny.launcher";
+const DBUS_OBJECT_PATH = "/com/github/wosteimer/tiny/launcher";
 
 pub fn main() !void {
     const app = c.adw_application_new(
-        "com.github.wosteimer.tiny-launcher",
+        APP_ID,
         c.G_APPLICATION_DEFAULT_FLAGS,
     );
     defer c.g_object_unref(app);
@@ -39,11 +43,47 @@ fn activate(app: *c.GtkApplication, _: c.gpointer) callconv(.C) void {
         window,
         c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE,
     );
-    c.gtk_window_present(window);
-    const native = c.gtk_widget_get_native(@ptrCast(window));
-    const surface = c.gtk_native_get_surface(native);
-    const monitor = c.gdk_display_get_monitor_at_surface(display, surface);
-    var rect = c.GdkRectangle{};
-    c.gdk_monitor_get_geometry(monitor, &rect);
-    c.gtk_window_set_default_size(@ptrCast(window), rect.width, rect.height);
+    //c.gtk_window_present(window);
+    _ = c.g_bus_own_name(
+        c.G_BUS_TYPE_SESSION,
+        APP_ID,
+        c.G_BUS_NAME_WATCHER_FLAGS_NONE,
+        @ptrCast(&onBusAcquired),
+        null,
+        null,
+        @ptrCast(window),
+        null,
+    );
+}
+
+fn onBusAcquired(
+    connection: *c.GDBusConnection,
+    _: [*:0]const u8,
+    user_data: c.gpointer,
+) callconv(.C) void {
+    _ = c.g_dbus_connection_signal_subscribe(
+        connection,
+        null,
+        APP_ID,
+        "Show",
+        DBUS_OBJECT_PATH,
+        null,
+        c.G_DBUS_SIGNAL_FLAGS_NONE,
+        @ptrCast(&onShowSignal),
+        user_data,
+        null,
+    );
+}
+
+fn onShowSignal(
+    _: *c.GDBusConnection,
+    _: [*:0]const u8,
+    _: [*:0]const u8,
+    _: [*:0]const u8,
+    _: [*:0]const u8,
+    _: *c.GVariant,
+    user_data: c.gpointer,
+) callconv(.C) void {
+    const window = TS_LAUNCHER_WINDOW(user_data);
+    window.show();
 }

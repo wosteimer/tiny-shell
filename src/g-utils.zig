@@ -172,3 +172,8 @@ pub const GDK_PAINTABLE = makeInstanceCaster(
     @ptrCast(&c.gdk_paintable_get_type),
     c.GdkPaintable,
 );
+
+pub const GTK_TEXT = makeInstanceCaster(
+    @ptrCast(&c.gtk_text_get_type),
+    c.GtkText,
+);

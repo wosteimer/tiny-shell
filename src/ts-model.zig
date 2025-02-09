@@ -24,11 +24,20 @@ pub const TsModel = struct {
         @ptrCast(&c.g_object_get_type),
     );
 
+    const Prop = enum(usize) {
+        filter = 1,
+        n_properties,
+    };
+    var properties = std.mem.zeroes(
+        [@intFromEnum(Prop.n_properties)]?*c.GParamSpec,
+    );
+
     parent: c.GObject,
     infos: std.StringHashMap(*c.GAppInfo),
     allocator: std.mem.Allocator,
     current: std.ArrayList([]const u8),
     default: std.ArrayList([]const u8),
+    filter: [*:0]const u8,
 
     fn interfaceInit(interface: *c.GListModelInterface) callconv(.C) void {
         interface.*.get_item = @ptrCast(&getItem);
@@ -39,6 +48,49 @@ pub const TsModel = struct {
     fn classInit(class: *TsModelClass) callconv(.C) void {
         g.G_OBJECT_CLASS(class).*.dispose = @ptrCast(&dispose);
         g.G_OBJECT_CLASS(class).*.finalize = @ptrCast(&finalize);
+        g.G_OBJECT_CLASS(class).*.get_property = @ptrCast(&getProperty);
+        g.G_OBJECT_CLASS(class).*.set_property = @ptrCast(&setProperty);
+        const flags = c.G_PARAM_READWRITE |
+            c.G_PARAM_STATIC_STRINGS |
+            c.G_PARAM_EXPLICIT_NOTIFY;
+        properties[@intFromEnum(Prop.filter)] = c.g_param_spec_string(
+            "filter",
+            null,
+            null,
+            "",
+            flags,
+        );
+        c.g_object_class_install_properties(
+            g.G_OBJECT_CLASS(class),
+            @intFromEnum(Prop.n_properties),
+            @ptrCast(&properties),
+        );
+    }
+
+    fn getProperty(
+        gobject: *c.GObject,
+        property_id: Prop,
+        value: *c.GValue,
+        _: *c.GParamSpec,
+    ) void {
+        const self = TS_MODEL(gobject);
+        switch (property_id) {
+            .filter => c.g_value_set_string(value, self.getFilter()),
+            else => @panic("invalid property id"),
+        }
+    }
+
+    fn setProperty(
+        gobject: *c.GObject,
+        property_id: Prop,
+        value: *c.GValue,
+        _: *c.GParamSpec,
+    ) void {
+        const self = TS_MODEL(gobject);
+        switch (property_id) {
+            .filter => self.setFilter(c.g_value_get_string(value)),
+            else => @panic("invalid property id"),
+        }
     }
 
     fn dispose(gobject: *c.GObject) callconv(.C) void {
@@ -119,24 +171,33 @@ pub const TsModel = struct {
             try self.default.append(std.mem.span(app_id));
         }
         std.mem.sort([]const u8, self.default.items, {}, lessThan);
-        try self.setFilter("");
+        self.setFilter("");
     }
 
     pub fn getType() c.GType {
         return g_type.getType();
     }
+    pub fn getFilter(self: *Self) callconv(.C) [*:0]const u8 {
+        return self.filter;
+    }
 
-    pub fn setFilter(self: *Self, filter: []const u8) !void {
+    pub fn setFilter(self: *Self, filter: [*:0]const u8) callconv(.C) void {
+        self.filter = filter;
+        const filter_len = std.mem.len(filter);
         const removed: u32 = @intCast(self.current.items.len);
         for (self.current.items) |app_id| {
             self.allocator.free(app_id);
         }
         self.current.clearRetainingCapacity();
-        if (filter.len == 0) {
+        if (filter_len == 0) {
             for (self.default.items) |default_app_id| {
-                const app_id = try self.allocator.alloc(u8, default_app_id.len);
+                const app_id = self.allocator.alloc(u8, default_app_id.len) catch {
+                    @panic("out of memory");
+                };
                 @memcpy(app_id, default_app_id.ptr);
-                try self.current.append(app_id);
+                self.current.append(app_id) catch {
+                    @panic("out of memory");
+                };
             }
             const added: u32 = @intCast(self.current.items.len);
             c.g_list_model_items_changed(g.G_LIST_MODEL(self), 0, removed, added);
@@ -154,14 +215,22 @@ pub const TsModel = struct {
                 const app_info = c.g_desktop_app_info_new(buf);
                 defer c.g_object_unref(g.G_OBJECT(app_info));
                 if (c.g_app_info_should_show(g.G_APP_INFO(app_info)) == 0) continue;
-                const app_id = try self.allocator.alloc(u8, len);
+                const app_id = self.allocator.alloc(u8, len) catch {
+                    @panic("out of memory");
+                };
                 @memcpy(app_id, std.mem.span(buf));
-                try self.current.append(app_id);
+                self.current.append(app_id) catch {
+                    @panic("out of memory");
+                };
             }
         }
         c.g_strfreev(result[i]);
         const added: u32 = @intCast(self.current.items.len);
         c.g_list_model_items_changed(g.G_LIST_MODEL(self), 0, removed, added);
+        c.g_object_notify_by_pspec(
+            g.G_OBJECT(self),
+            properties[@intFromEnum(Prop.filter)],
+        );
     }
 };
 
@@ -170,6 +239,6 @@ pub const TsModel = struct {
 test "must not have leak memory" {
     const model = try TsModel.new(std.testing.allocator);
     defer c.g_object_unref(@ptrCast(model));
-    try model.setFilter("d");
-    try model.setFilter("a");
+    model.setFilter("d");
+    model.setFilter("a");
 }

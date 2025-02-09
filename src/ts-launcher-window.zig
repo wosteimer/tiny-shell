@@ -8,7 +8,7 @@ const TsModel = @import("ts-model.zig").TsModel;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
-const TS_LAUNHER_WINDOW = g.makeInstanceCaster(
+pub const TS_LAUNCHER_WINDOW = g.makeInstanceCaster(
     TsLauncherWindow.getType,
     TsLauncherWindow,
 );
@@ -74,7 +74,7 @@ pub const TsLauncherWindow = struct {
     }
 
     fn dispose(gobject: *c.GObject) callconv(.C) void {
-        const self = TS_LAUNHER_WINDOW(gobject);
+        const self = TS_LAUNCHER_WINDOW(gobject);
         const parent_class = g.G_OBJECT_CLASS(tsLauncherWindowParentClass());
         c.gtk_widget_dispose_template(g.GTK_WIDGET(gobject), Self.getType());
         c.g_object_unref(g.G_OBJECT(self.model));
@@ -123,9 +123,7 @@ pub const TsLauncherWindow = struct {
                 shortcut,
             );
         }
-        const row = c.gtk_list_box_get_row_at_index(@ptrCast(self.list_box), 0);
-        c.gtk_list_box_select_row(self.list_box, row);
-        _ = c.gtk_widget_grab_focus(g.GTK_WIDGET(text));
+        self.reset();
     }
 
     fn confirmShortcut(
@@ -142,7 +140,7 @@ pub const TsLauncherWindow = struct {
         _: *c.GVariant,
         window: *Self,
     ) callconv(.C) bool {
-        c.gtk_window_close(g.GTK_WINDOW(window));
+        c.gtk_widget_hide(g.GTK_WIDGET(window));
         return true;
     }
 
@@ -211,7 +209,7 @@ pub const TsLauncherWindow = struct {
             );
             defer c.g_object_unref(@ptrCast(app_info));
             _ = c.g_app_info_launch(app_info, null, null, null);
-            c.gtk_window_close(g.GTK_WINDOW(self));
+            c.gtk_widget_hide(g.GTK_WIDGET(self));
         }
         return true;
     }
@@ -237,7 +235,7 @@ pub const TsLauncherWindow = struct {
         entry: *c.GtkSearchEntry,
     ) callconv(.C) bool {
         const filter = std.mem.span(c.gtk_editable_get_text(g.GTK_EDITABLE(entry)));
-        self.model.setFilter(filter) catch @panic("out of memory");
+        self.model.setFilter(filter);
         const row = c.gtk_list_box_get_row_at_index(self.list_box, 0);
         c.gtk_list_box_select_row(self.list_box, row);
         const adjustment = c.gtk_scrolled_window_get_vadjustment(
@@ -264,16 +262,39 @@ pub const TsLauncherWindow = struct {
             &rect,
             &c.graphene_point_t{ .x = @floatCast(x), .y = @floatCast(y) },
         )) {
-            c.gtk_window_close(g.GTK_WINDOW(self));
+            c.gtk_widget_hide(g.GTK_WIDGET(self));
         }
         return false;
     }
 
     pub fn new() callconv(.C) *Self {
-        return TS_LAUNHER_WINDOW(c.g_object_new(Self.getType(), null));
+        return TS_LAUNCHER_WINDOW(c.g_object_new(Self.getType(), null));
     }
 
     pub fn getType() c.GType {
         return g_type.getType();
+    }
+
+    pub fn show(self: *Self) void {
+        self.reset();
+        c.gtk_widget_show(g.GTK_WIDGET(self));
+        const display = c.gdk_display_get_default();
+        const native = c.gtk_widget_get_native(g.GTK_WIDGET(self));
+        const surface = c.gtk_native_get_surface(native);
+        const monitor = c.gdk_display_get_monitor_at_surface(display, surface);
+        var rect = c.GdkRectangle{};
+        c.gdk_monitor_get_geometry(monitor, &rect);
+        c.gtk_window_set_default_size(g.GTK_WINDOW(self), rect.width, rect.height);
+    }
+
+    pub fn reset(self: *Self) void {
+        self.model.setFilter("");
+        const text = c.gtk_editable_get_delegate(g.GTK_EDITABLE(self.search_entry));
+        const buffer = c.gtk_text_get_buffer(g.GTK_TEXT(text));
+        c.gtk_entry_buffer_set_text(buffer, "", 0);
+        const row = c.gtk_list_box_get_row_at_index(self.list_box, 0);
+        c.gtk_list_box_select_row(self.list_box, row);
+        _ = c.gtk_widget_grab_focus(g.GTK_WIDGET(text));
+        self.scrollToSelection();
     }
 };

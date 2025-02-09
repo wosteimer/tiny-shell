@@ -16,7 +16,13 @@ pub const TsListItemClass = struct { parent: c.GtkListBoxRowClass };
 
 pub const TsListItem = struct {
     const Self = @This();
-    var g_type: c.GType = undefined;
+    const g_type = g.GType(
+        TsListItemClass,
+        TsListItem,
+        &classInit,
+        &init,
+        @ptrCast(&c.gtk_list_box_row_get_type),
+    );
 
     parent: c.GtkListBoxRow,
     name: *c.GtkLabel,
@@ -89,16 +95,6 @@ pub const TsListItem = struct {
     }
 
     pub fn getType() c.GType {
-        if (g_type != 0) return g_type;
-        g_type = c.g_type_register_static_simple(
-            c.gtk_list_box_row_get_type(),
-            "TsListItem",
-            @sizeOf(TsListItemClass),
-            @ptrCast(&classInit),
-            @sizeOf(TsListItem),
-            @ptrCast(&init),
-            c.G_TYPE_FLAG_FINAL,
-        );
-        return g_type;
+        return g_type.getType();
     }
 };

@@ -28,7 +28,13 @@ pub const TsLauncherWindowClass = struct {
 };
 
 pub const TsLauncherWindow = struct {
-    var g_type: c.GType = undefined;
+    const g_type = g.GType(
+        TsLauncherWindowClass,
+        TsLauncherWindow,
+        &classInit,
+        &init,
+        @ptrCast(&c.adw_application_window_get_type),
+    );
     const Self = @This();
     parent: c.AdwApplicationWindow,
     model: *TsModel,
@@ -268,16 +274,6 @@ pub const TsLauncherWindow = struct {
     }
 
     pub fn getType() c.GType {
-        if (g_type != 0) return g_type;
-        g_type = c.g_type_register_static_simple(
-            c.adw_application_window_get_type(),
-            "TsLauncherWindow",
-            @sizeOf(TsLauncherWindowClass),
-            @ptrCast(&classInit),
-            @sizeOf(TsLauncherWindow),
-            @ptrCast(&init),
-            c.G_TYPE_FLAG_FINAL,
-        );
-        return g_type;
+        return g_type.getType();
     }
 };

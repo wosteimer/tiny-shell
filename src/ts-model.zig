@@ -13,7 +13,16 @@ pub const TsModelClass = struct { parent_class: c.GObjectClass };
 
 pub const TsModel = struct {
     const Self = @This();
-    var g_type: u64 = undefined;
+    const g_type = g.GTypeWithInterce(
+        TsModelClass,
+        TsModel,
+        c.GListModelInterface,
+        &classInit,
+        &init,
+        &interfaceInit,
+        @ptrCast(&c.g_list_model_get_type),
+        @ptrCast(&c.g_object_get_type),
+    );
 
     parent: c.GObject,
     infos: std.StringHashMap(*c.GAppInfo),
@@ -74,7 +83,7 @@ pub const TsModel = struct {
     }
 
     pub fn new(allocator: std.mem.Allocator) !*Self {
-        const self: *Self = @alignCast(@ptrCast(c.g_object_new(getType(), null)));
+        const self: *Self = TS_MODEL(c.g_object_new(getType(), null));
         self.allocator = allocator;
         try initData(self, allocator);
         return self;
@@ -114,27 +123,7 @@ pub const TsModel = struct {
     }
 
     pub fn getType() c.GType {
-        if (g_type != 0) return g_type;
-        g_type = c.g_type_register_static_simple(
-            c.g_object_get_type(),
-            "TsModel",
-            @sizeOf(TsModelClass),
-            @ptrCast(&classInit),
-            @sizeOf(Self),
-            @ptrCast(&init),
-            c.G_TYPE_FLAG_FINAL,
-        );
-        const interface_info = c.GInterfaceInfo{
-            .interface_init = @ptrCast(&interfaceInit),
-            .interface_data = null,
-            .interface_finalize = null,
-        };
-        c.g_type_add_interface_static(
-            g_type,
-            c.g_list_model_get_type(),
-            &interface_info,
-        );
-        return g_type;
+        return g_type.getType();
     }
 
     pub fn setFilter(self: *Self, filter: []const u8) !void {
@@ -176,6 +165,8 @@ pub const TsModel = struct {
     }
 };
 
+// NOTE: This is a bad test case as it depends on the apps that are installed on the
+//       machine running it.
 test "must not have leak memory" {
     const model = try TsModel.new(std.testing.allocator);
     defer c.g_object_unref(@ptrCast(model));

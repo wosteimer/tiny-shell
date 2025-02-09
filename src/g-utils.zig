@@ -48,6 +48,88 @@ pub fn makeClassPeeker(getGType: *const fn () c.GType, T: type) fn () *T {
     }.f;
 }
 
+pub fn GType(
+    comptime C: type,
+    comptime T: type,
+    classInit: *const fn (*C) callconv(.C) void,
+    init: *const fn (*T) callconv(.C) void,
+    getParentType: *const fn () c.GType,
+) type {
+    return struct {
+        var buf = std.mem.zeroes([255]u8);
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
+        const allocator = fba.allocator();
+        var g_type: c.GType = 0;
+
+        pub fn getType() c.GType {
+            if (g_type != 0) return g_type;
+            var iter = std.mem.splitSequence(u8, @typeName(T), ".");
+            _ = iter.next();
+            const name = allocator.dupeZ(u8, iter.next().?) catch {
+                @panic("class name is too long");
+            };
+            g_type = c.g_type_register_static_simple(
+                getParentType(),
+                name,
+                @sizeOf(C),
+                @ptrCast(classInit),
+                @sizeOf(T),
+                @ptrCast(init),
+                c.G_TYPE_FLAG_FINAL,
+            );
+            return g_type;
+        }
+    };
+}
+
+pub fn GTypeWithInterce(
+    comptime C: type,
+    comptime T: type,
+    comptime I: type,
+    classInit: *const fn (*C) callconv(.C) void,
+    init: *const fn (*T) callconv(.C) void,
+    interfaceInit: *const fn (*I) callconv(.C) void,
+    getInterfaceType: *const fn () c.GType,
+    getParentType: *const fn () c.GType,
+) type {
+    return struct {
+        var buf = std.mem.zeroes([255]u8);
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
+        const allocator = fba.allocator();
+
+        var g_type: c.GType = 0;
+        pub fn getType() c.GType {
+            if (g_type != 0) return g_type;
+            var iter = std.mem.splitSequence(u8, @typeName(T), ".");
+            _ = iter.next();
+            const name = allocator.dupeZ(u8, iter.next().?) catch {
+                @panic("class name is too long");
+            };
+
+            g_type = c.g_type_register_static_simple(
+                getParentType(),
+                name,
+                @sizeOf(C),
+                @ptrCast(classInit),
+                @sizeOf(T),
+                @ptrCast(init),
+                c.G_TYPE_FLAG_FINAL,
+            );
+            const interface_info = c.GInterfaceInfo{
+                .interface_init = @ptrCast(interfaceInit),
+                .interface_data = null,
+                .interface_finalize = null,
+            };
+            c.g_type_add_interface_static(
+                g_type,
+                getInterfaceType(),
+                &interface_info,
+            );
+            return g_type;
+        }
+    };
+}
+
 pub const G_LIST_MODEL = makeInstanceCaster(
     @ptrCast(&c.g_list_model_get_type),
     c.GListModel,

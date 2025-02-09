@@ -1,9 +1,5 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("gtk/gtk.h");
-    @cInclude("gtk4-layer-shell/gtk4-layer-shell.h");
-    @cInclude("adwaita.h");
-});
+const c = @import("c.zig");
 const TsLauncherWindow = @import("ts-launcher-window.zig").TsLauncherWindow;
 
 pub fn main() !void {
@@ -39,7 +35,10 @@ fn activate(app: *c.GtkApplication, _: c.gpointer) callconv(.C) void {
     c.gtk_window_set_application(window, app);
     c.gtk_layer_init_for_window(window);
     c.gtk_layer_set_layer(window, c.GTK_LAYER_SHELL_LAYER_TOP);
-    c.gtk_layer_set_keyboard_mode(window, c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE);
+    c.gtk_layer_set_keyboard_mode(
+        window,
+        c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE,
+    );
     c.gtk_window_present(window);
     const native = c.gtk_widget_get_native(@ptrCast(window));
     const surface = c.gtk_native_get_surface(native);

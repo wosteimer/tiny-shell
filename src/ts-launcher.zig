@@ -4,6 +4,7 @@ const g = @import("g-utils.zig");
 const TsLauncherWindow = @import("ts-launcher-window.zig").TsLauncherWindow;
 const TS_LAUNCHER_WINDOW = @import("ts-launcher-window.zig").TS_LAUNCHER_WINDOW;
 
+const VERSION = "0.1.0";
 const APP_ID = "com.github.wosteimer.tiny.launcher";
 const DBUS_OBJECT_PATH = "/com/github/wosteimer/tiny/launcher";
 
@@ -12,21 +13,80 @@ const interface_vtable = c.GDBusInterfaceVTable{
     .method_call = @ptrCast(&onMethodCall),
 };
 
+const Args = enum {
+    help,
+    h,
+    version,
+    v,
+    silent,
+    s,
+};
+
 pub fn main() !void {
+    var args = std.process.args();
+    _ = args.skip();
+    if (args.next()) |arg| {
+        var parsed: Args = .help;
+        if (std.mem.startsWith(u8, arg, "--") and arg.len > 3) {
+            if (std.meta.stringToEnum(Args, arg[2..])) |v| {
+                parsed = v;
+            } else {
+                std.log.warn("invalid argument", .{});
+            }
+        } else if (std.mem.startsWith(u8, arg, "-") and arg.len == 2) {
+            if (std.meta.stringToEnum(Args, arg[1..])) |v| {
+                parsed = v;
+            } else {
+                std.log.warn("invalid argument", .{});
+            }
+        } else {
+            std.log.warn("invalid argument", .{});
+        }
+        const out = std.io.getStdOut().writer();
+        switch (parsed) {
+            .help, .h => {
+                try out.print(
+                    \\Usage: ts-launcher [Option]
+                    \\Options:
+                    \\    -h, --help      Print this message
+                    \\    -v, --version   Print version
+                    \\    -s, --silent    run the program in the background 
+                    \\
+                , .{});
+                return;
+            },
+            .version, .v => {
+                try out.print("tiny launcher v{s}\n", .{VERSION});
+                return;
+            },
+            .silent, .s => {
+                if (isRunning()) {
+                    return;
+                }
+                run(true);
+                return;
+            },
+        }
+    }
     if (isRunning()) {
         showWindow();
         return;
     }
+    run(false);
+}
+
+fn run(is_silent: bool) void {
     const app = c.adw_application_new(
         APP_ID,
         c.G_APPLICATION_DEFAULT_FLAGS,
     );
     defer c.g_object_unref(app);
+    var _is_silent = is_silent;
     _ = c.g_signal_connect_data(
         @ptrCast(app),
         "activate",
         @ptrCast(&activate),
-        null,
+        @ptrCast(&_is_silent),
         null,
         c.G_TYPE_FLAG_FINAL,
     );
@@ -35,7 +95,7 @@ pub fn main() !void {
 
 // TODO: Error handling for all funcions below
 
-fn activate(app: *c.GtkApplication, _: c.gpointer) callconv(.C) void {
+fn activate(app: *c.GtkApplication, is_silent: *bool) callconv(.C) void {
     const css_provider = c.gtk_css_provider_new();
     const display = c.gdk_display_get_default();
     c.gtk_css_provider_load_from_resource(
@@ -55,7 +115,9 @@ fn activate(app: *c.GtkApplication, _: c.gpointer) callconv(.C) void {
         window,
         c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE,
     );
-    c.gtk_window_present(window);
+    if (!is_silent.*) {
+        c.gtk_window_present(window);
+    }
     _ = c.g_bus_own_name(
         c.G_BUS_TYPE_SESSION,
         APP_ID,

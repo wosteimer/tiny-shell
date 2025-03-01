@@ -35,8 +35,8 @@ pub const TsModel = struct {
     parent: c.GObject,
     infos: std.StringHashMap(*c.GAppInfo),
     allocator: std.mem.Allocator,
-    current: std.ArrayList([]const u8),
-    default: std.ArrayList([]const u8),
+    current: std.ArrayList([]u8),
+    default: std.ArrayList([]u8),
     filter: [*:0]const u8,
 
     fn interfaceInit(interface: *c.GListModelInterface) callconv(.C) void {
@@ -103,6 +103,9 @@ pub const TsModel = struct {
     fn finalize(gobject: *c.GObject) callconv(.C) void {
         const parent_class = g.G_OBJECT_CLASS(tsModelParentClass());
         const self = TS_MODEL(gobject);
+        for (self.default.items) |app_id| {
+            self.allocator.free(app_id);
+        }
         for (self.current.items) |app_id| {
             self.allocator.free(app_id);
         }
@@ -141,42 +144,56 @@ pub const TsModel = struct {
         return self;
     }
 
-    fn lessThan(_: void, first: []const u8, second: []const u8) bool {
-        const first_app_info = c.g_desktop_app_info_new(@ptrCast(first));
-        defer c.g_object_unref(@ptrCast(first_app_info));
-        const second_app_info = c.g_desktop_app_info_new(@ptrCast(second));
-        defer c.g_object_unref(@ptrCast(second_app_info));
+    fn lessThan(allocator: std.mem.Allocator, first: []u8, second: []u8) bool {
+        const tmp_1 = allocator.dupeZ(u8, first) catch {
+            @panic("out of memory");
+        };
+        defer allocator.free(tmp_1);
+        const tmp_2 = allocator.dupeZ(u8, second) catch {
+            @panic("out of memory");
+        };
+        defer allocator.free(tmp_2);
+        const first_app_info = c.g_desktop_app_info_new(@ptrCast(tmp_1));
+        defer c.g_object_unref(g.G_OBJECT(first_app_info));
+        const second_app_info = c.g_desktop_app_info_new(@ptrCast(tmp_2));
+        defer c.g_object_unref(g.G_OBJECT(second_app_info));
         const first_name = std.mem.span(
-            c.g_app_info_get_name(@ptrCast(first_app_info)),
+            c.g_app_info_get_name(g.G_APP_INFO(first_app_info)),
         );
         const second_name = std.mem.span(
-            c.g_app_info_get_name(@ptrCast(second_app_info)),
+            c.g_app_info_get_name(g.G_APP_INFO(second_app_info)),
         );
         return std.mem.order(u8, first_name, second_name) == .lt;
     }
 
     fn initData(self: *Self, allocator: std.mem.Allocator) !void {
         self.infos = std.StringHashMap(*c.GAppInfo).init(allocator);
-        self.default = std.ArrayList([]const u8).init(allocator);
-        self.current = std.ArrayList([]const u8).init(allocator);
-        var data = c.g_app_info_get_all();
-        defer c.g_list_free_full(data, c.g_object_unref);
-        while (data != null) : (data = data.*.next) {
-            const app_info: *c.GAppInfo = @ptrCast(data.*.data);
+        self.default = std.ArrayList([]u8).init(allocator);
+        self.current = std.ArrayList([]u8).init(allocator);
+        const data = c.g_app_info_get_all();
+        defer c.g_list_free(data);
+        var iter = data;
+        while (iter != null) : (iter = iter.*.next) {
+            const app_info = g.G_APP_INFO(iter.*.data);
             if (c.g_app_info_should_show(app_info) == 0) {
                 continue;
             }
-            const app_id = c.g_app_info_get_id(app_info);
-            try self.infos.put(std.mem.span(app_id), @ptrCast(app_info));
-            try self.default.append(std.mem.span(app_id));
+            const c_app_id = std.mem.span(c.g_app_info_get_id(app_info));
+            const app_id = self.allocator.alloc(u8, c_app_id.len) catch {
+                @panic("out of memory");
+            };
+            @memcpy(app_id, c_app_id);
+            try self.infos.put(app_id, g.G_APP_INFO(app_info));
+            try self.default.append(app_id);
         }
-        std.mem.sort([]const u8, self.default.items, {}, lessThan);
+        std.mem.sort([]u8, self.default.items, self.allocator, lessThan);
         self.setFilter("");
     }
 
     pub fn getType() c.GType {
         return g_type.getType();
     }
+
     pub fn getFilter(self: *Self) callconv(.C) [*:0]const u8 {
         return self.filter;
     }

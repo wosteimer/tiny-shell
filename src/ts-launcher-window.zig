@@ -204,9 +204,39 @@ pub const TsLauncherWindow = struct {
     pub fn onActivated(self: *Self, _: *c.GObject) callconv(.C) bool {
         if (c.gtk_list_box_get_selected_row(self.list_box)) |selected| {
             const pos: u32 = @intCast(c.gtk_list_box_row_get_index(selected));
-            const app_info: *c.GAppInfo = g.G_APP_INFO(
+            const app_info = g.G_APP_INFO(
                 c.g_list_model_get_item(g.G_LIST_MODEL(self.model), pos),
             );
+            const desktop_app_info = g.G_DESKTOP_APP_INFO(app_info);
+            const is_run_in_terminal = c.g_desktop_app_info_get_boolean(
+                desktop_app_info,
+                "Terminal",
+            );
+            if (is_run_in_terminal != 0) {
+                const exec = c.g_desktop_app_info_get_string(
+                    desktop_app_info,
+                    "Exec",
+                );
+                defer c.g_free(exec);
+                // HACK: remove .desktop placeholders(%f, %F, %U, etc ...)
+                var it = std.mem.tokenize(u8, std.mem.span(exec), " ");
+                var buf = std.ArrayList(u8).init(allocator);
+                defer buf.deinit();
+                while (it.next()) |token| {
+                    if (std.mem.startsWith(u8, token, "%")) continue;
+                    buf.appendSlice(token) catch @panic("out of memory");
+                    buf.append(' ') catch @panic("out of memory");
+                }
+                if (buf.items.len > 0) {
+                    buf.items[buf.items.len - 1] = 0;
+                }
+                // TODO: configurable terminal
+                var child = std.process.Child.init(
+                    &.{ "kitty", buf.toOwnedSlice() catch @panic("out of memory") },
+                    allocator,
+                );
+                child.spawn() catch @panic("failed to run a program");
+            }
             defer c.g_object_unref(@ptrCast(app_info));
             _ = c.g_app_info_launch(app_info, null, null, null);
             c.gtk_widget_hide(g.GTK_WIDGET(self));
@@ -288,7 +318,15 @@ pub const TsLauncherWindow = struct {
     }
 
     pub fn reset(self: *Self) void {
-        self.model.setFilter("");
+        c.g_object_unref(self.model);
+        self.model = TsModel.new(allocator) catch @panic("out of memory");
+        c.gtk_list_box_bind_model(
+            self.list_box,
+            @ptrCast(self.model),
+            @ptrCast(&TsListItem.new),
+            null,
+            null,
+        );
         const text = c.gtk_editable_get_delegate(g.GTK_EDITABLE(self.search_entry));
         const buffer = c.gtk_text_get_buffer(g.GTK_TEXT(text));
         c.gtk_entry_buffer_set_text(buffer, "", 0);

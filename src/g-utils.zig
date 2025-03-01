@@ -140,6 +140,11 @@ pub const G_APP_INFO = makeInstanceCaster(
     c.GAppInfo,
 );
 
+pub const G_DESKTOP_APP_INFO = makeInstanceCaster(
+    @ptrCast(&c.g_desktop_app_info_get_type),
+    c.GDesktopAppInfo,
+);
+
 pub const G_OBJECT = makeInstanceCaster(
     @ptrCast(&c.g_object_get_type),
     c.GObject,

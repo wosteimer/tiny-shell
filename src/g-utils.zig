@@ -130,6 +130,11 @@ pub fn GTypeWithInterce(
     };
 }
 
+pub const G_APPLICATION = makeInstanceCaster(
+    @ptrCast(&c.g_application_get_type),
+    c.GApplication,
+);
+
 pub const G_LIST_MODEL = makeInstanceCaster(
     @ptrCast(&c.g_list_model_get_type),
     c.GListModel,

@@ -208,6 +208,7 @@ pub const TsLauncherWindow = struct {
                 c.g_list_model_get_item(g.G_LIST_MODEL(self.model), pos),
             );
             const desktop_app_info = g.G_DESKTOP_APP_INFO(app_info);
+            defer c.g_object_unref(@ptrCast(app_info));
             const is_run_in_terminal = c.g_desktop_app_info_get_boolean(
                 desktop_app_info,
                 "Terminal",
@@ -237,7 +238,6 @@ pub const TsLauncherWindow = struct {
                 );
                 child.spawn() catch @panic("failed to run a program");
             }
-            defer c.g_object_unref(@ptrCast(app_info));
             _ = c.g_app_info_launch(app_info, null, null, null);
             c.gtk_widget_hide(g.GTK_WIDGET(self));
         }

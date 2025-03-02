@@ -7,94 +7,86 @@ const TS_LAUNCHER_WINDOW = @import("ts-launcher-window.zig").TS_LAUNCHER_WINDOW;
 const VERSION = "0.1.0";
 const APP_ID = "com.github.wosteimer.tiny.launcher";
 
-const Args = enum {
-    help,
-    h,
-    version,
-    v,
-    silent,
-    s,
-};
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
 
 var window: ?*c.GtkWindow = null;
 
 pub fn main() !void {
-    var args = std.process.args();
-    _ = args.skip();
-    if (args.next()) |arg| {
-        var parsed: Args = .help;
-        if (std.mem.startsWith(u8, arg, "--") and arg.len > 3) {
-            if (std.meta.stringToEnum(Args, arg[2..])) |v| {
-                parsed = v;
-            } else {
-                std.log.warn("invalid argument", .{});
-            }
-        } else if (std.mem.startsWith(u8, arg, "-") and arg.len == 2) {
-            if (std.meta.stringToEnum(Args, arg[1..])) |v| {
-                parsed = v;
-            } else {
-                std.log.warn("invalid argument", .{});
-            }
-        } else {
-            std.log.warn("invalid argument", .{});
-        }
-        const out = std.io.getStdOut().writer();
-        switch (parsed) {
-            .help, .h => {
-                try out.print(
-                    \\Usage: ts-launcher [Option]
-                    \\Options:
-                    \\    -h, --help      Print this message
-                    \\    -v, --version   Print version
-                    \\    -s, --silent    run the program in the background 
-                    \\
-                , .{});
-                return;
-            },
-            .version, .v => {
-                try out.print("tiny launcher v{s}\n", .{VERSION});
-                return;
-            },
-            .silent, .s => {
-                run(true);
-                return;
-            },
-        }
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a_allocator = arena.allocator();
+    var args = std.ArrayList([*:0]u8).init(a_allocator);
+    var iter = std.process.args();
+    while (iter.next()) |arg| {
+        try args.append(try a_allocator.dupeZ(u8, arg));
     }
-    run(false);
-}
-
-fn run(is_silent: bool) void {
     const app = c.adw_application_new(
         APP_ID,
-        c.G_APPLICATION_FLAGS_NONE,
+        c.G_APPLICATION_HANDLES_COMMAND_LINE,
     );
     defer c.g_object_unref(app);
-    var _is_silent = is_silent;
     _ = c.g_signal_connect_data(
         @ptrCast(app),
         "activate",
         @ptrCast(&activate),
-        @ptrCast(&_is_silent),
+        null,
         null,
         c.G_TYPE_FLAG_FINAL,
     );
-    _ = c.g_application_run(@ptrCast(app), 0, null);
+    _ = c.g_signal_connect_data(
+        @ptrCast(app),
+        "command-line",
+        @ptrCast(&commandLine),
+        null,
+        null,
+        c.G_TYPE_FLAG_FINAL,
+    );
+    const options = [3]c.GOptionEntry{
+        c.GOptionEntry{
+            .long_name = "version",
+            .short_name = 'v',
+            .flags = c.G_OPTION_FLAG_NONE,
+            .arg = c.G_OPTION_ARG_NONE,
+            .arg_data = null,
+            .description = "Print version",
+            .arg_description = "",
+        },
+        c.GOptionEntry{
+            .long_name = "silent",
+            .short_name = 's',
+            .flags = c.G_OPTION_FLAG_NONE,
+            .arg = c.G_OPTION_ARG_NONE,
+            .arg_data = null,
+            .description = "Run the program in the background",
+            .arg_description = "",
+        },
+        undefined,
+    };
+    c.g_application_add_main_option_entries(
+        g.G_APPLICATION(app),
+        &options,
+    );
+    _ = c.g_application_run(
+        g.G_APPLICATION(app),
+        @intCast(args.items.len),
+        @ptrCast(args.items.ptr),
+    );
 }
 
-fn activate(app: *c.GtkApplication, is_silent: *bool) callconv(.C) void {
-    const css_provider = c.gtk_css_provider_new();
-    const display = c.gdk_display_get_default();
-    c.gtk_css_provider_load_from_resource(
-        css_provider,
-        "com/github/wosteimer/tiny/launcher/css/style.css",
-    );
-    c.gtk_style_context_add_provider_for_display(
-        display,
-        @ptrCast(css_provider),
-        c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
+fn activate(app: *c.GtkApplication, _: *c.gpointer) callconv(.C) void {
     if (window == null) {
+        const css_provider = c.gtk_css_provider_new();
+        const display = c.gdk_display_get_default();
+        c.gtk_css_provider_load_from_resource(
+            css_provider,
+            "com/github/wosteimer/tiny/launcher/css/style.css",
+        );
+        c.gtk_style_context_add_provider_for_display(
+            display,
+            @ptrCast(css_provider),
+            c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
         window = @ptrCast(TsLauncherWindow.new());
         c.gtk_window_set_application(window, app);
         c.gtk_layer_init_for_window(window);
@@ -103,10 +95,26 @@ fn activate(app: *c.GtkApplication, is_silent: *bool) callconv(.C) void {
             window,
             c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE,
         );
-    } else {
-        TS_LAUNCHER_WINDOW(window).reset();
     }
-    if (!is_silent.*) {
-        c.gtk_window_present(window);
+}
+
+fn commandLine(
+    app: *c.GApplication,
+    cmdline: *c.GApplicationCommandLine,
+) callconv(.C) i32 {
+    const options = c.g_application_command_line_get_options_dict(cmdline);
+    const is_silent = c.g_variant_dict_contains(options, "silent") != 0;
+    const show_version = c.g_variant_dict_contains(options, "version") != 0;
+    if (show_version) {
+        c.g_application_command_line_print(
+            cmdline,
+            "tiny launcher " ++ VERSION ++ "\n",
+        );
+        return 0;
     }
+    c.g_application_activate(app);
+    if (c.gtk_widget_is_visible(g.GTK_WIDGET(window)) == 0 and !is_silent) {
+        TS_LAUNCHER_WINDOW(window).show();
+    }
+    return 0;
 }

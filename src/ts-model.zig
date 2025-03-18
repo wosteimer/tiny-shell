@@ -13,7 +13,7 @@ pub const TsModelClass = struct { parent_class: c.GObjectClass };
 
 pub const TsModel = struct {
     const Self = @This();
-    const g_type = g.GTypeWithInterce(
+    const g_type = g.GTypeWithInterface(
         TsModelClass,
         TsModel,
         c.GListModelInterface,

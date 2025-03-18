@@ -82,7 +82,7 @@ pub fn GType(
     };
 }
 
-pub fn GTypeWithInterce(
+pub fn GTypeWithInterface(
     comptime C: type,
     comptime T: type,
     comptime I: type,

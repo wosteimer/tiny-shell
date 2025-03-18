@@ -42,6 +42,7 @@ pub const TsLauncherWindow = struct {
     search_entry: *c.GtkSearchEntry,
     list_box: *c.GtkListBox,
     scrolled_window: *c.GtkScrolledWindow,
+    stack: *c.GtkStack,
 
     fn classInit(class: *TsLauncherWindowClass) callconv(.C) void {
         g.G_OBJECT_CLASS(class).*.dispose = @ptrCast(&dispose);
@@ -214,6 +215,18 @@ pub const TsLauncherWindow = struct {
                 "Terminal",
             );
             if (is_run_in_terminal != 0) {
+                const settings = c.g_settings_new(
+                    "org.gnome.desktop.default-applications.terminal",
+                );
+                const c_term_exec = c.g_settings_get_string(settings, "exec");
+                const c_term_exec_arg = c.g_settings_get_string(
+                    settings,
+                    "exec-arg",
+                );
+                defer c.g_free(c_term_exec);
+                defer c.g_free(c_term_exec_arg);
+                const term_exec = std.mem.span(c_term_exec);
+                const term_exec_arg = std.mem.span(c_term_exec_arg);
                 const exec = c.g_desktop_app_info_get_string(
                     desktop_app_info,
                     "Exec",
@@ -231,11 +244,26 @@ pub const TsLauncherWindow = struct {
                 if (buf.items.len > 0) {
                     buf.items[buf.items.len - 1] = 0;
                 }
-                // TODO: configurable terminal
-                var child = std.process.Child.init(
-                    &.{ "kitty", buf.toOwnedSlice() catch @panic("out of memory") },
-                    allocator,
-                );
+                var child: std.process.Child = undefined;
+                if (std.mem.eql(u8, term_exec_arg, "")) {
+                    child = std.process.Child.init(
+                        &.{
+                            term_exec, buf.toOwnedSlice() catch {
+                                @panic("out of memory");
+                            },
+                        },
+                        allocator,
+                    );
+                } else {
+                    child = std.process.Child.init(
+                        &.{
+                            term_exec, term_exec_arg, buf.toOwnedSlice() catch {
+                                @panic("out of memory");
+                            },
+                        },
+                        allocator,
+                    );
+                }
                 child.spawn() catch @panic("failed to run a program");
             }
             _ = c.g_app_info_launch(app_info, null, null, null);
@@ -266,6 +294,11 @@ pub const TsLauncherWindow = struct {
     ) callconv(.C) bool {
         const filter = std.mem.span(c.gtk_editable_get_text(g.GTK_EDITABLE(entry)));
         self.model.setFilter(filter);
+        if (c.g_list_model_get_n_items(g.G_LIST_MODEL(self.model)) == 0) {
+            c.gtk_stack_set_visible_child_name(self.stack, "empty");
+            return false;
+        }
+        c.gtk_stack_set_visible_child_name(self.stack, "list");
         const row = c.gtk_list_box_get_row_at_index(self.list_box, 0);
         c.gtk_list_box_select_row(self.list_box, row);
         const adjustment = c.gtk_scrolled_window_get_vadjustment(

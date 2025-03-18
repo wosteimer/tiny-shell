@@ -12,7 +12,9 @@
                     </object>
                 </child>
                 <child>
-                    <object class="GtkLabel" id="name" />
+                    <object class="GtkLabel" id="name">
+                        <property name="ellipsize">PANGO_ELLIPSIZE_END</property>
+                    </object>
                 </child>
             </object>
         </child>

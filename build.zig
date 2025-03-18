@@ -31,9 +31,9 @@ pub fn build(b: *std.Build) void {
     ts_launcher.linkSystemLibrary("gtk4");
     ts_launcher.linkSystemLibrary("gtk4-layer-shell");
     ts_launcher.linkSystemLibrary("gio-unix-2.0");
+    ts_launcher.step.dependOn(&gen_resources_source.step);
     b.installArtifact(ts_launcher);
     const ts_launcher_cmd = b.addRunArtifact(ts_launcher);
-    ts_launcher_cmd.step.dependOn(&gen_resources_source.step);
     if (b.args) |args| {
         ts_launcher_cmd.addArgs(args);
     }

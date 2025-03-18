@@ -90,6 +90,7 @@ pub const TsListItem = struct {
         );
         defer c.g_object_unref(icon);
         c.gtk_label_set_label(self.name, app_name);
+        c.gtk_widget_set_tooltip_text(g.GTK_WIDGET(self.name), app_name);
         c.gtk_image_set_from_paintable(self.icon, g.GDK_PAINTABLE(icon));
         return self;
     }

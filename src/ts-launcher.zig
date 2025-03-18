@@ -113,7 +113,8 @@ fn commandLine(
         return 0;
     }
     c.g_application_activate(app);
-    if (c.gtk_widget_is_visible(g.GTK_WIDGET(window)) == 0 and !is_silent) {
+    const is_visible = c.gtk_widget_is_visible(g.GTK_WIDGET(window)) == 0;
+    if (is_visible and !is_silent) {
         TS_LAUNCHER_WINDOW(window).show();
     }
     return 0;

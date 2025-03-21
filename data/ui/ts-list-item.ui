@@ -16,6 +16,15 @@
                         <property name="ellipsize">PANGO_ELLIPSIZE_END</property>
                     </object>
                 </child>
+                <child>
+                    <object class="GtkPopoverMenu" id="popover" />
+                </child>
+                <child>
+                    <object class="GtkGestureClick">
+                        <property name="button">3</property>
+                        <signal name="pressed" handler="onRightClick" swapped="true" />
+                    </object>
+                </child>
             </object>
         </child>
     </template>

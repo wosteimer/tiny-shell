@@ -208,66 +208,12 @@ pub const TsLauncherWindow = struct {
             const app_info = g.G_APP_INFO(
                 c.g_list_model_get_item(g.G_LIST_MODEL(self.model), pos),
             );
-            const desktop_app_info = g.G_DESKTOP_APP_INFO(app_info);
-            defer c.g_object_unref(@ptrCast(app_info));
-            const is_run_in_terminal = c.g_desktop_app_info_get_boolean(
-                desktop_app_info,
-                "Terminal",
+            defer c.g_object_unref(g.G_APP_INFO(app_info));
+            _ = c.gtk_widget_activate_action_variant(
+                g.GTK_WIDGET(self),
+                "app.launch",
+                c.g_variant_new_string(c.g_app_info_get_id(app_info)),
             );
-            if (is_run_in_terminal != 0) {
-                const settings = c.g_settings_new(
-                    "org.gnome.desktop.default-applications.terminal",
-                );
-                const c_term_exec = c.g_settings_get_string(settings, "exec");
-                const c_term_exec_arg = c.g_settings_get_string(
-                    settings,
-                    "exec-arg",
-                );
-                defer c.g_free(c_term_exec);
-                defer c.g_free(c_term_exec_arg);
-                const term_exec = std.mem.span(c_term_exec);
-                const term_exec_arg = std.mem.span(c_term_exec_arg);
-                const exec = c.g_desktop_app_info_get_string(
-                    desktop_app_info,
-                    "Exec",
-                );
-                defer c.g_free(exec);
-                // HACK: remove .desktop placeholders(%f, %F, %U, etc ...)
-                var it = std.mem.tokenize(u8, std.mem.span(exec), " ");
-                var buf = std.ArrayList(u8).init(allocator);
-                defer buf.deinit();
-                while (it.next()) |token| {
-                    if (std.mem.startsWith(u8, token, "%")) continue;
-                    buf.appendSlice(token) catch @panic("out of memory");
-                    buf.append(' ') catch @panic("out of memory");
-                }
-                if (buf.items.len > 0) {
-                    buf.items[buf.items.len - 1] = 0;
-                }
-                var child: std.process.Child = undefined;
-                if (std.mem.eql(u8, term_exec_arg, "")) {
-                    child = std.process.Child.init(
-                        &.{
-                            term_exec, buf.toOwnedSlice() catch {
-                                @panic("out of memory");
-                            },
-                        },
-                        allocator,
-                    );
-                } else {
-                    child = std.process.Child.init(
-                        &.{
-                            term_exec, term_exec_arg, buf.toOwnedSlice() catch {
-                                @panic("out of memory");
-                            },
-                        },
-                        allocator,
-                    );
-                }
-                child.spawn() catch @panic("failed to run a program");
-            }
-            _ = c.g_app_info_launch(app_info, null, null, null);
-            c.gtk_widget_hide(g.GTK_WIDGET(self));
         }
         return true;
     }

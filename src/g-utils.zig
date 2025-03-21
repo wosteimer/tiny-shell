@@ -187,3 +187,23 @@ pub const GTK_TEXT = makeInstanceCaster(
     @ptrCast(&c.gtk_text_get_type),
     c.GtkText,
 );
+
+pub const GTK_GESTURE_SINGLE = makeInstanceCaster(
+    @ptrCast(&c.gtk_gesture_single_get_type),
+    c.GtkGestureSingle,
+);
+
+pub const G_MENU_MODEL = makeInstanceCaster(
+    @ptrCast(&c.g_menu_model_get_type),
+    c.GMenuModel,
+);
+
+pub const GTK_POPOVER_MENU = makeInstanceCaster(
+    @ptrCast(&c.gtk_popover_menu_get_type),
+    c.GtkPopoverMenu,
+);
+
+pub const GTK_POPOVER = makeInstanceCaster(
+    @ptrCast(&c.gtk_popover_get_type),
+    c.GtkPopover,
+);

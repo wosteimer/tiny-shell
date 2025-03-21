@@ -25,6 +25,7 @@ pub fn main() !void {
         APP_ID,
         c.G_APPLICATION_HANDLES_COMMAND_LINE,
     );
+    makeActions(@ptrCast(app));
     defer c.g_object_unref(app);
     _ = c.g_signal_connect_data(
         @ptrCast(app),
@@ -32,7 +33,7 @@ pub fn main() !void {
         @ptrCast(&activate),
         null,
         null,
-        c.G_TYPE_FLAG_FINAL,
+        c.G_CONNECT_DEFAULT,
     );
     _ = c.g_signal_connect_data(
         @ptrCast(app),
@@ -40,7 +41,7 @@ pub fn main() !void {
         @ptrCast(&commandLine),
         null,
         null,
-        c.G_TYPE_FLAG_FINAL,
+        c.G_CONNECT_DEFAULT,
     );
     const options = [3]c.GOptionEntry{
         c.GOptionEntry{
@@ -72,6 +73,77 @@ pub fn main() !void {
         @intCast(args.items.len),
         @ptrCast(args.items.ptr),
     );
+}
+
+fn makeActions(app: *c.GApplication) void {
+    const launch = c.g_simple_action_new("launch", c.G_VARIANT_TYPE("s"));
+    _ = c.g_signal_connect_data(
+        g.G_OBJECT(launch),
+        "activate",
+        @ptrCast(&onLaunch),
+        null,
+        null,
+        c.G_CONNECT_DEFAULT,
+    );
+    const launch_action = c.g_simple_action_new("launch-action", c.G_VARIANT_TYPE("s"));
+    _ = c.g_signal_connect_data(
+        g.G_OBJECT(launch_action),
+        "activate",
+        @ptrCast(&onLaunchAction),
+        null,
+        null,
+        c.G_CONNECT_DEFAULT,
+    );
+    const hide = c.g_simple_action_new("hide", c.G_VARIANT_TYPE("s"));
+    _ = c.g_signal_connect_data(
+        g.G_OBJECT(hide),
+        "activate",
+        @ptrCast(&onHide),
+        null,
+        null,
+        c.G_CONNECT_DEFAULT,
+    );
+    c.g_action_map_add_action(@ptrCast(app), @ptrCast(launch));
+    c.g_action_map_add_action(@ptrCast(app), @ptrCast(launch_action));
+    c.g_action_map_add_action(@ptrCast(app), @ptrCast(hide));
+}
+
+fn onLaunch(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
+    const app_id = c.g_variant_get_string(parameter, null);
+    const desktop_app_info = c.g_desktop_app_info_new(app_id);
+    const app_info = g.G_APP_INFO(desktop_app_info);
+    defer c.g_object_unref(@ptrCast(desktop_app_info));
+    _ = c.g_app_info_launch(app_info, null, null, null);
+    c.gtk_widget_hide(g.GTK_WIDGET(window));
+}
+
+fn onLaunchAction(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const a_allocator = arena.allocator();
+    const s_param = c.g_variant_get_string(parameter, null);
+    var it = std.mem.split(u8, std.mem.span(s_param), "::");
+    const app_id = a_allocator.dupeZ(u8, it.next().?) catch {
+        @panic("out of memory");
+    };
+    const action = a_allocator.dupeZ(u8, it.next().?) catch {
+        @panic("out of memory");
+    };
+    const app_info = c.g_desktop_app_info_new(app_id);
+    defer c.g_object_unref(app_info);
+    c.g_desktop_app_info_launch_action(
+        app_info,
+        a_allocator.dupeZ(u8, action) catch {
+            @panic("out of memory");
+        },
+        null,
+    );
+    c.gtk_widget_hide(g.GTK_WIDGET(window));
+}
+
+fn onHide(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
+    const s_param = c.g_variant_get_string(parameter, null);
+    std.debug.print("hide: {s}\n", .{s_param});
 }
 
 fn activate(app: *c.GtkApplication, _: *c.gpointer) callconv(.C) void {

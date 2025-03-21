@@ -175,9 +175,7 @@ pub const TsModel = struct {
         var iter = data;
         while (iter != null) : (iter = iter.*.next) {
             const app_info = g.G_APP_INFO(iter.*.data);
-            if (c.g_app_info_should_show(app_info) == 0) {
-                continue;
-            }
+            if (c.g_app_info_should_show(app_info) == 0) continue;
             const c_app_id = std.mem.span(c.g_app_info_get_id(app_info));
             const app_id = self.allocator.alloc(u8, c_app_id.len) catch {
                 @panic("out of memory");
@@ -231,7 +229,8 @@ pub const TsModel = struct {
                 const len = std.mem.len(buf);
                 const app_info = c.g_desktop_app_info_new(buf);
                 defer c.g_object_unref(g.G_OBJECT(app_info));
-                if (c.g_app_info_should_show(g.G_APP_INFO(app_info)) == 0) continue;
+                // if (c.g_app_info_should_show(g.G_APP_INFO(app_info)) == 0) continue;
+                if (self.infos.get(std.mem.span(buf)) == null) continue;
                 const app_id = self.allocator.alloc(u8, len) catch {
                     @panic("out of memory");
                 };

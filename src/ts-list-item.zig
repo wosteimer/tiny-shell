@@ -36,7 +36,7 @@ pub const TsListItem = struct {
             g.GTK_WIDGET_CLASS(class),
             "/com/github/wosteimer/tiny/launcher/ui/ts-list-item.ui",
         );
-        inline for (@typeInfo(Self).Struct.fields) |field| {
+        inline for (@typeInfo(Self).@"struct".fields) |field| {
             const name = field.name;
             if (std.mem.eql(u8, name, "parent")) comptime continue;
             c.gtk_widget_class_bind_template_child_full(
@@ -46,7 +46,7 @@ pub const TsListItem = struct {
                 @offsetOf(Self, name),
             );
         }
-        inline for (@typeInfo(Self).Struct.decls) |decl| {
+        inline for (@typeInfo(Self).@"struct".decls) |decl| {
             const name = decl.name;
             if (!std.mem.startsWith(u8, name, "on")) comptime continue;
             if (!std.ascii.isUpper(name[2])) comptime continue;

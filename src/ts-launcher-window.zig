@@ -5,8 +5,7 @@ const g = @import("g-utils.zig");
 const TsListItem = @import("ts-list-item.zig").TsListItem;
 const TsModel = @import("ts-model.zig").TsModel;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
+const allocator = std.heap.page_allocator;
 
 pub const TS_LAUNCHER_WINDOW = g.makeInstanceCaster(
     TsLauncherWindow.getType,
@@ -51,7 +50,7 @@ pub const TsLauncherWindow = struct {
             g.GTK_WIDGET_CLASS(class),
             "/com/github/wosteimer/tiny/launcher/ui/ts-launcher-window.ui",
         );
-        inline for (@typeInfo(Self).Struct.fields) |field| {
+        inline for (@typeInfo(Self).@"struct".fields) |field| {
             const name = field.name;
             if (std.mem.eql(u8, name, "parent")) comptime continue;
             if (std.mem.eql(u8, name, "model")) comptime continue;
@@ -62,7 +61,7 @@ pub const TsLauncherWindow = struct {
                 @offsetOf(Self, name),
             );
         }
-        inline for (@typeInfo(Self).Struct.decls) |decl| {
+        inline for (@typeInfo(Self).@"struct".decls) |decl| {
             const name = decl.name;
             if (!std.mem.startsWith(u8, name, "on")) comptime continue;
             if (!std.ascii.isUpper(name[2])) comptime continue;

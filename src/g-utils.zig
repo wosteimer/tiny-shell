@@ -63,7 +63,7 @@ pub fn GType(
 
         pub fn getType() c.GType {
             if (g_type != 0) return g_type;
-            var iter = std.mem.splitSequence(u8, @typeName(T), ".");
+            var iter = std.mem.splitScalar(u8, @typeName(T), '.');
             _ = iter.next();
             const name = allocator.dupeZ(u8, iter.next().?) catch {
                 @panic("class name is too long");

@@ -7,8 +7,7 @@ const TS_LAUNCHER_WINDOW = @import("ts-launcher-window.zig").TS_LAUNCHER_WINDOW;
 const VERSION = "0.1.0";
 const APP_ID = "com.github.wosteimer.tiny.launcher";
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
+const allocator = std.heap.page_allocator;
 
 var window: ?*c.GtkWindow = null;
 
@@ -108,7 +107,7 @@ fn makeActions(app: *c.GApplication) void {
     c.g_action_map_add_action(@ptrCast(app), @ptrCast(hide));
 }
 
-fn onLaunch(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
+fn onLaunch(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) callconv(.C) void {
     const app_id = c.g_variant_get_string(parameter, null);
     const desktop_app_info = c.g_desktop_app_info_new(app_id);
     const app_info = g.G_APP_INFO(desktop_app_info);
@@ -117,12 +116,12 @@ fn onLaunch(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
     c.gtk_widget_hide(g.GTK_WIDGET(window));
 }
 
-fn onLaunchAction(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
+fn onLaunchAction(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) callconv(.C) void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const a_allocator = arena.allocator();
     const s_param = c.g_variant_get_string(parameter, null);
-    var it = std.mem.split(u8, std.mem.span(s_param), "::");
+    var it = std.mem.splitSequence(u8, std.mem.span(s_param), "::");
     const app_id = a_allocator.dupeZ(u8, it.next().?) catch {
         @panic("out of memory");
     };
@@ -141,7 +140,7 @@ fn onLaunchAction(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) vo
     c.gtk_widget_hide(g.GTK_WIDGET(window));
 }
 
-fn onHide(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) void {
+fn onHide(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) callconv(.C) void {
     const s_param = c.g_variant_get_string(parameter, null);
     std.debug.print("hide: {s}\n", .{s_param});
 }

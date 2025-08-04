@@ -113,7 +113,7 @@ fn onLaunch(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) callconv
     const app_info = g.G_APP_INFO(desktop_app_info);
     defer c.g_object_unref(@ptrCast(desktop_app_info));
     _ = c.g_app_info_launch(app_info, null, null, null);
-    c.gtk_widget_hide(g.GTK_WIDGET(window));
+    TS_LAUNCHER_WINDOW(window).hide();
 }
 
 fn onLaunchAction(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) callconv(.C) void {
@@ -137,12 +137,22 @@ fn onLaunchAction(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) ca
         },
         null,
     );
-    c.gtk_widget_hide(g.GTK_WIDGET(window));
+    TS_LAUNCHER_WINDOW(window).hide();
 }
 
 fn onHide(_: *c.GSimpleAction, parameter: *c.GVariant, _: c.gpointer) callconv(.C) void {
     const s_param = c.g_variant_get_string(parameter, null);
     std.debug.print("hide: {s}\n", .{s_param});
+}
+
+fn checkIfColorSchemeChanged(widget: ?*c.GtkWidget, settings: ?*c.GtkSettings) void {
+    var prefer_dark: bool = undefined;
+    c.g_object_get(settings, "gtk-application-prefer-dark-theme", &prefer_dark, c.NULL);
+    if (prefer_dark) {
+        c.gtk_widget_add_css_class(widget, "dark-theme");
+        return;
+    }
+    c.gtk_widget_remove_css_class(widget, "dark-theme");
 }
 
 fn activate(app: *c.GtkApplication, _: *c.gpointer) callconv(.C) void {
@@ -165,6 +175,22 @@ fn activate(app: *c.GtkApplication, _: *c.gpointer) callconv(.C) void {
         c.gtk_layer_set_keyboard_mode(
             window,
             c.GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE,
+        );
+
+        const gen = struct {
+            fn callback(settings: ?*c.GtkSettings, _: ?*c.GParamSpec, _: c.gpointer) callconv(.C) void {
+                checkIfColorSchemeChanged(g.GTK_WIDGET(window), settings);
+            }
+        };
+        const settings = c.gtk_settings_get_default();
+        checkIfColorSchemeChanged(g.GTK_WIDGET(window), settings);
+        _ = c.g_signal_connect_data(
+            settings,
+            "notify::gtk-application-prefer-dark-theme",
+            @ptrCast(&gen.callback),
+            null,
+            null,
+            c.G_CONNECT_DEFAULT,
         );
     }
 }

@@ -37,7 +37,7 @@ pub const TsLauncherWindow = struct {
     const Self = @This();
     parent: c.AdwApplicationWindow,
     model: *TsModel,
-    main: *c.AdwToolbarView,
+    main: *c.GtkBox,
     search_entry: *c.GtkSearchEntry,
     list_box: *c.GtkListBox,
     scrolled_window: *c.GtkScrolledWindow,
@@ -140,7 +140,7 @@ pub const TsLauncherWindow = struct {
         _: *c.GVariant,
         window: *Self,
     ) callconv(.C) bool {
-        c.gtk_widget_hide(g.GTK_WIDGET(window));
+        window.hide();
         return true;
     }
 
@@ -163,9 +163,12 @@ pub const TsLauncherWindow = struct {
     }
 
     pub fn moveSelection(self: *Self, direction: MoveSelectionDirection) void {
+        const n_rows = c.g_list_model_get_n_items(g.G_LIST_MODEL(self.model));
+        if (n_rows == 0) {
+            return;
+        }
         const row = c.gtk_list_box_get_selected_row(self.list_box);
         const index = c.gtk_list_box_row_get_index(row);
-        const n_rows = c.g_list_model_get_n_items(g.G_LIST_MODEL(self.model));
         const next = c.gtk_list_box_get_row_at_index(
             self.list_box,
             wrap(index + @intFromEnum(direction), 0, @intCast(n_rows)),
@@ -270,7 +273,7 @@ pub const TsLauncherWindow = struct {
             &rect,
             &c.graphene_point_t{ .x = @floatCast(x), .y = @floatCast(y) },
         )) {
-            c.gtk_widget_hide(g.GTK_WIDGET(self));
+            self.hide();
         }
         return false;
     }
@@ -293,6 +296,19 @@ pub const TsLauncherWindow = struct {
         var rect = c.GdkRectangle{};
         c.gdk_monitor_get_geometry(monitor, &rect);
         c.gtk_window_set_default_size(g.GTK_WINDOW(self), rect.width, rect.height);
+        c.gtk_widget_remove_css_class(g.GTK_WIDGET(self.main), "hide");
+        c.gtk_widget_add_css_class(g.GTK_WIDGET(self.main), "show");
+    }
+
+    pub fn hide(self: *Self) void {
+        const gen = struct {
+            fn callback(widget: c.gpointer) callconv(.C) void {
+                c.gtk_widget_hide(g.GTK_WIDGET(widget));
+            }
+        };
+        c.gtk_widget_remove_css_class(g.GTK_WIDGET(self.main), "show");
+        c.gtk_widget_add_css_class(g.GTK_WIDGET(self.main), "hide");
+        _ = c.g_timeout_add_once(300, &gen.callback, self);
     }
 
     pub fn reset(self: *Self) void {

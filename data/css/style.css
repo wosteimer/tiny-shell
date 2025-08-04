@@ -1,3 +1,66 @@
+:root {
+    --accent-bg-color: #1e66f5;
+    --window-bg-color: #eff1f5;
+    --border-color: #ccd0da;
+    --accent-fg-color: #4c4f69;
+    --window-fg-color: #4c4f69;
+    --scrollbar-outline-color: #11111b;
+}
+
+.dark-theme {
+    --accent-bg-color: #89b4fa;
+    --window-bg-color: #1e1e2e;
+    --border-color: #313244;
+    --accent-fg-color: #cdd6f4;
+    --window-fg-color: #cdd6f4;
+    --scrollbar-outline-color: #11111b;
+}
+
+@keyframes show {
+    0% {
+        transform: translateY(-64px);
+        opacity: 0;
+    }
+
+    60% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes hide {
+    0% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    40% {
+        transform: translateY(32px);
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-64px);
+    }
+}
+
+.show {
+    animation: show 300ms ease-in;
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.hide {
+    animation: hide 300ms ease-out;
+    transform: translateY(-64px);
+    opacity: 1;
+}
+
 .ts-main {
     border-radius: 12px;
     background-color: var(--window-bg-color);

@@ -1,260 +1,296 @@
 const std = @import("std");
-const c = @import("c.zig");
-const g = @import("g-utils.zig");
+const g = @import("gobject");
+const gio = @import("gio");
+const glib = @import("glib");
 
-pub const TS_MODEL = g.makeInstanceCaster(&TsModel.getType, TsModel);
+const ApplicationProvider = @import("application_provider.zig");
+const Application = @import("application_provider.zig").Application;
+const Action = @import("application_provider.zig").Action;
 
-pub const tsModelParentClass = g.makeClassPeeker(
-    @ptrCast(&c.g_object_get_type),
-    c.GObjectClass,
-);
+pub const TsModelItem = extern struct {
+    parent: Parent,
 
-pub const TsModelClass = struct { parent_class: c.GObjectClass };
-
-pub const TsModel = struct {
     const Self = @This();
-    const g_type = g.GTypeWithInterface(
-        TsModelClass,
-        TsModel,
-        c.GListModelInterface,
-        &classInit,
-        &init,
-        &interfaceInit,
-        @ptrCast(&c.g_list_model_get_type),
-        @ptrCast(&c.g_object_get_type),
-    );
+    pub const Parent = g.Object;
+
+    const Private = struct {
+        arena: std.heap.ArenaAllocator,
+        application: Application,
+
+        var offset: c_int = 0;
+    };
+
+    pub const Class = extern struct {
+        parent_class: Parent.Class,
+
+        pub const Instance = TsModelItem;
+        var parent: *Parent.Class = undefined;
+
+        pub fn as(class: *Class, comptime T: type) *T {
+            return g.ext.as(T, class);
+        }
+
+        pub fn init(class: *Class) callconv(.c) void {
+            g.Object.virtual_methods.dispose.implement(class, &dispose);
+            g.Object.virtual_methods.finalize.implement(class, &finalize);
+        }
+    };
+
+    pub const getGObjectType = g.ext.defineClass(TsModelItem, .{
+        .classInit = &Class.init,
+        .parent_class = &Class.parent,
+        .private = .{ .Type = Private, .offset = &Private.offset },
+    });
+
+    fn dispose(self: *Self) callconv(.c) void {
+        g.Object.virtual_methods.dispose.call(Class.parent, self.as(g.Object));
+    }
+
+    fn finalize(self: *Self) callconv(.c) void {
+        self.private().arena.deinit();
+        g.Object.virtual_methods.finalize.call(Class.parent, self.as(g.Object));
+    }
+
+    fn private(self: *Self) *Private {
+        return g.ext.impl_helpers.getPrivate(self, Private, Private.offset);
+    }
+
+    pub fn as(self: *Self, comptime T: type) *T {
+        return g.ext.as(T, self);
+    }
+
+    pub fn new(allocator: std.mem.Allocator, app: Application) *Self {
+        const self = g.ext.newInstance(TsModelItem, .{});
+        self.private().arena = std.heap.ArenaAllocator.init(allocator);
+        self.private().application = copy(self.private().arena.allocator(), app);
+        return self;
+    }
+
+    fn copy(allocator: std.mem.Allocator, app: Application) Application {
+        const actions = allocator.alloc(Action, app.actions.len) catch unreachable;
+        for (0..actions.len) |i| {
+            actions[i] = .{
+                .key = allocator.dupeZ(u8, app.actions[i].key) catch unreachable,
+                .name = allocator.dupeZ(u8, app.actions[i].name) catch unreachable,
+            };
+        }
+        var description: ?[]u8 = null;
+        if (app.description) |capture| {
+            description = allocator.dupeZ(u8, capture) catch unreachable;
+        }
+        var commandline: ?[]u8 = null;
+        if (app.commandline) |capture| {
+            commandline = allocator.dupeZ(u8, capture) catch unreachable;
+        }
+        var icon: ?[]u8 = null;
+        if (app.icon) |capture| {
+            icon = allocator.dupeZ(u8, capture) catch unreachable;
+        }
+        return Application{
+            .id = allocator.dupeZ(u8, app.id) catch unreachable,
+            .name = allocator.dupeZ(u8, app.name) catch unreachable,
+            .display_name = allocator.dupeZ(u8, app.display_name) catch unreachable,
+            .description = description,
+            .commandline = commandline,
+            .icon = icon,
+            .actions = actions,
+            .should_show = app.should_show,
+        };
+    }
+
+    pub fn ref(self: *Self) *TsModelItem {
+        return g.Object.ref(self.as(g.Object)).as(TsModelItem);
+    }
+
+    pub fn unref(self: *Self) void {
+        g.Object.unref(self.as(g.Object));
+    }
+
+    pub fn getApplication(self: *Self) Application {
+        return self.private().application;
+    }
+};
+
+pub const TsModel = extern struct {
+    parent: Parent,
+
+    const Self = @This();
+    pub const Parent = g.Object;
+    pub const Implements = [_]type{
+        gio.ListModel,
+    };
+
+    const Private = struct {
+        allocator: std.mem.Allocator,
+        filter: []u8,
+        provider: *ApplicationProvider,
+        apps: ApplicationProvider.Result([]ApplicationProvider.Application),
+
+        var offset: c_int = 0;
+    };
+
+    pub const Class = extern struct {
+        parent_class: Parent.Class,
+
+        pub const Instance = TsModel;
+        var parent: *Parent.Class = undefined;
+
+        pub fn as(class: *Class, comptime T: type) *T {
+            return g.ext.as(T, class);
+        }
+
+        pub fn init(class: *Class) callconv(.c) void {
+            g.Object.virtual_methods.dispose.implement(class, &dispose);
+            g.Object.virtual_methods.finalize.implement(class, &finalize);
+            g.Object.virtual_methods.get_property.implement(class, &getProperty);
+            g.Object.virtual_methods.set_property.implement(class, &setProperty);
+            const flags = g.ParamFlags{
+                .readable = true,
+                .writable = true,
+                .static_name = true,
+                .static_nick = true,
+                .static_blurb = true,
+            };
+            properties[@intFromEnum(Prop.filter)] = g.paramSpecString(
+                "filter",
+                null,
+                null,
+                "",
+                flags,
+            );
+            g.ObjectClass.installProperties(
+                class.as(g.ObjectClass),
+                @intCast(@intFromEnum(Prop.n_properties)),
+                @ptrCast(&properties),
+            );
+        }
+    };
+
+    pub const getGObjectType = g.ext.defineClass(TsModel, .{
+        .classInit = &Class.init,
+        .parent_class = &Class.parent,
+        .implements = &.{
+            g.ext.implement(gio.ListModel, .{ .init = &interfaceInit }),
+        },
+        .private = .{ .Type = Private, .offset = &Private.offset },
+    });
 
     const Prop = enum(usize) {
         filter = 1,
         n_properties,
     };
-    var properties = std.mem.zeroes(
-        [@intFromEnum(Prop.n_properties)]?*c.GParamSpec,
-    );
+    var properties = std.mem.zeroes([@intFromEnum(Prop.n_properties)]?*g.ParamSpec);
 
-    parent: c.GObject,
-    infos: std.StringHashMap(*c.GAppInfo),
-    allocator: std.mem.Allocator,
-    current: std.ArrayList([]u8),
-    default: std.ArrayList([]u8),
-    filter: [*:0]const u8,
-
-    fn interfaceInit(interface: *c.GListModelInterface) callconv(.C) void {
-        interface.*.get_item = @ptrCast(&getItem);
-        interface.*.get_item_type = @ptrCast(&getItemType);
-        interface.*.get_n_items = @ptrCast(&getNItems);
-    }
-
-    fn classInit(class: *TsModelClass) callconv(.C) void {
-        g.G_OBJECT_CLASS(class).*.dispose = @ptrCast(&dispose);
-        g.G_OBJECT_CLASS(class).*.finalize = @ptrCast(&finalize);
-        g.G_OBJECT_CLASS(class).*.get_property = @ptrCast(&getProperty);
-        g.G_OBJECT_CLASS(class).*.set_property = @ptrCast(&setProperty);
-        const flags = c.G_PARAM_READWRITE |
-            c.G_PARAM_STATIC_STRINGS |
-            c.G_PARAM_EXPLICIT_NOTIFY;
-        properties[@intFromEnum(Prop.filter)] = c.g_param_spec_string(
-            "filter",
-            null,
-            null,
-            "",
-            flags,
-        );
-        c.g_object_class_install_properties(
-            g.G_OBJECT_CLASS(class),
-            @intFromEnum(Prop.n_properties),
-            @ptrCast(&properties),
-        );
+    fn interfaceInit(interface: *gio.ListModelInterface) callconv(.c) void {
+        interface.*.f_get_item = @ptrCast(&getItem);
+        interface.*.f_get_item_type = @ptrCast(&getItemType);
+        interface.*.f_get_n_items = @ptrCast(&getNItems);
     }
 
     fn getProperty(
-        gobject: *c.GObject,
-        property_id: Prop,
-        value: *c.GValue,
-        _: *c.GParamSpec,
-    ) void {
-        const self = TS_MODEL(gobject);
-        switch (property_id) {
-            .filter => c.g_value_set_string(value, self.getFilter()),
+        self: *Self,
+        property_id: u32,
+        value: *g.Value,
+        _: *g.ParamSpec,
+    ) callconv(.c) void {
+        switch (@as(Prop, @enumFromInt(property_id))) {
+            .filter => {
+                const filter = self.private().allocator.dupeZ(u8, self.getFilter()) catch unreachable;
+                defer self.private().allocator.free(filter);
+                value.setString(filter);
+            },
             else => @panic("invalid property id"),
         }
     }
 
-    fn setProperty(
-        gobject: *c.GObject,
-        property_id: Prop,
-        value: *c.GValue,
-        _: *c.GParamSpec,
-    ) void {
-        const self = TS_MODEL(gobject);
-        switch (property_id) {
-            .filter => self.setFilter(c.g_value_get_string(value)),
+    fn setProperty(self: *Self, property_id: u32, value: *const g.Value, _: *g.ParamSpec) callconv(.c) void {
+        switch (@as(Prop, @enumFromInt(property_id))) {
+            .filter => self.setFilter(std.mem.span(value.getString() orelse "")),
             else => @panic("invalid property id"),
         }
     }
 
-    fn dispose(gobject: *c.GObject) callconv(.C) void {
-        const parent_class = g.G_OBJECT_CLASS(tsModelParentClass());
-        if (parent_class.*.dispose) |parent_dispose| {
-            parent_dispose(gobject);
-        }
+    fn dispose(self: *Self) callconv(.c) void {
+        g.Object.virtual_methods.dispose.call(Class.parent, self.as(Parent));
     }
 
-    fn finalize(gobject: *c.GObject) callconv(.C) void {
-        const parent_class = g.G_OBJECT_CLASS(tsModelParentClass());
-        const self = TS_MODEL(gobject);
-        for (self.default.items) |app_id| {
-            self.allocator.free(app_id);
-        }
-        for (self.current.items) |app_id| {
-            self.allocator.free(app_id);
-        }
-        var iter = self.infos.iterator();
-        while (iter.next()) |app_info| {
-            c.g_object_unref(g.G_APP_INFO(app_info.value_ptr.*));
-        }
-        self.infos.deinit();
-        self.default.deinit();
-        self.current.deinit();
-        if (parent_class.*.finalize) |parent_finalize| {
-            parent_finalize(gobject);
-        }
+    fn finalize(self: *Self) callconv(.c) void {
+        self.private().apps.deinit();
+        self.private().allocator.free(self.private().filter);
+        g.Object.virtual_methods.finalize.call(Class.parent, self.as(Parent));
     }
 
-    fn init(_: *Self) callconv(.C) void {}
-
-    fn getItem(self: *Self, pos: u64) callconv(.C) *c.GAppInfo {
-        const app_id = self.current.items[pos];
-        const app_info = self.infos.get(app_id) orelse @panic("invalid app_id");
-        return g.G_APP_INFO(c.g_object_ref(g.G_OBJECT(app_info)));
+    fn getItem(self: *Self, pos: usize) callconv(.c) *TsModelItem {
+        return TsModelItem.new(
+            self.private().allocator,
+            self.private().apps.data[pos],
+        );
     }
 
-    fn getItemType(_: *Self) callconv(.C) c.GType {
-        return c.g_app_info_get_type();
+    fn getItemType(_: *Self) callconv(.c) usize {
+        return TsModelItem.getGObjectType();
     }
 
-    fn getNItems(self: *Self) callconv(.C) usize {
-        return self.current.items.len;
+    fn getNItems(self: *Self) callconv(.c) usize {
+        return self.private().apps.data.len;
     }
 
-    pub fn new(allocator: std.mem.Allocator) !*Self {
-        const self: *Self = TS_MODEL(c.g_object_new(getType(), null));
-        self.allocator = allocator;
-        try initData(self, allocator);
+    fn private(self: *Self) *Private {
+        return g.ext.impl_helpers.getPrivate(self, Private, Private.offset);
+    }
+
+    pub fn as(self: *Self, comptime T: type) *T {
+        return g.ext.as(T, self);
+    }
+
+    pub fn new(allocator: std.mem.Allocator, provider: *ApplicationProvider) !*Self {
+        const self = g.ext.newInstance(TsModel, .{});
+        self.private().allocator = allocator;
+        self.private().provider = provider;
+        self.private().filter = try allocator.dupeZ(u8, "");
+        self.private().apps = try provider.getAll(true);
         return self;
     }
 
-    fn lessThan(allocator: std.mem.Allocator, first: []u8, second: []u8) bool {
-        const tmp_1 = allocator.dupeZ(u8, first) catch {
-            @panic("out of memory");
-        };
-        defer allocator.free(tmp_1);
-        const tmp_2 = allocator.dupeZ(u8, second) catch {
-            @panic("out of memory");
-        };
-        defer allocator.free(tmp_2);
-        const first_app_info = c.g_desktop_app_info_new(@ptrCast(tmp_1));
-        defer c.g_object_unref(g.G_OBJECT(first_app_info));
-        const second_app_info = c.g_desktop_app_info_new(@ptrCast(tmp_2));
-        defer c.g_object_unref(g.G_OBJECT(second_app_info));
-        const first_name = std.mem.span(
-            c.g_app_info_get_name(g.G_APP_INFO(first_app_info)),
-        );
-        const second_name = std.mem.span(
-            c.g_app_info_get_name(g.G_APP_INFO(second_app_info)),
-        );
-        return std.mem.order(u8, first_name, second_name) == .lt;
+    pub fn ref(self: *Self) *TsModel {
+        return g.Object.ref(self.as(g.Object)).as(TsModel);
     }
 
-    fn initData(self: *Self, allocator: std.mem.Allocator) !void {
-        self.infos = std.StringHashMap(*c.GAppInfo).init(allocator);
-        self.default = std.ArrayList([]u8).init(allocator);
-        self.current = std.ArrayList([]u8).init(allocator);
-        const data = c.g_app_info_get_all();
-        defer c.g_list_free(data);
-        var iter = data;
-        while (iter != null) : (iter = iter.*.next) {
-            const app_info = g.G_APP_INFO(iter.*.data);
-            if (c.g_app_info_should_show(app_info) == 0) continue;
-            const c_app_id = std.mem.span(c.g_app_info_get_id(app_info));
-            const app_id = self.allocator.alloc(u8, c_app_id.len) catch {
-                @panic("out of memory");
+    pub fn unref(self: *Self) void {
+        g.Object.unref(self.as(g.Object));
+    }
+
+    pub fn getFilter(self: *Self) []const u8 {
+        return @ptrCast(self.private().filter);
+    }
+
+    pub fn setFilter(self: *Self, filter: []const u8) void {
+        const removed = self.private().apps.data.len;
+        self.private().allocator.free(self.private().filter);
+        self.private().apps.deinit();
+        self.private().filter = self.private().allocator.dupeZ(u8, filter) catch {
+            @panic("ops");
+        };
+        if (std.mem.eql(u8, filter, "")) {
+            self.private().apps = self.private().provider.getAll(true) catch {
+                @panic("ops");
             };
-            @memcpy(app_id, c_app_id);
-            try self.infos.put(app_id, g.G_APP_INFO(app_info));
-            try self.default.append(app_id);
-        }
-        std.mem.sort([]u8, self.default.items, self.allocator, lessThan);
-        self.setFilter("");
-    }
-
-    pub fn getType() c.GType {
-        return g_type.getType();
-    }
-
-    pub fn getFilter(self: *Self) callconv(.C) [*:0]const u8 {
-        return self.filter;
-    }
-
-    pub fn setFilter(self: *Self, filter: [*:0]const u8) callconv(.C) void {
-        self.filter = filter;
-        const filter_len = std.mem.len(filter);
-        const removed: u32 = @intCast(self.current.items.len);
-        for (self.current.items) |app_id| {
-            self.allocator.free(app_id);
-        }
-        self.current.clearRetainingCapacity();
-        if (filter_len == 0) {
-            for (self.default.items) |default_app_id| {
-                const app_id = self.allocator.alloc(u8, default_app_id.len) catch {
-                    @panic("out of memory");
-                };
-                @memcpy(app_id, default_app_id.ptr);
-                self.current.append(app_id) catch {
-                    @panic("out of memory");
-                };
-            }
-            const added: u32 = @intCast(self.current.items.len);
-            c.g_list_model_items_changed(g.G_LIST_MODEL(self), 0, removed, added);
+            gio.ListModel.itemsChanged(
+                self.as(gio.ListModel),
+                0,
+                @intCast(removed),
+                @intCast(self.private().apps.data.len),
+            );
             return;
         }
-        const result = c.g_desktop_app_info_search(@ptrCast(filter));
-        defer c.g_free(@ptrCast(result));
-        var i: usize = 0;
-        while (result[i] != null) : (i += 1) {
-            var j: usize = 0;
-            defer c.g_strfreev(result[i]);
-            while (result[i][j] != null) : (j += 1) {
-                const buf = result[i][j];
-                const len = std.mem.len(buf);
-                const app_info = c.g_desktop_app_info_new(buf);
-                defer c.g_object_unref(g.G_OBJECT(app_info));
-                // if (c.g_app_info_should_show(g.G_APP_INFO(app_info)) == 0) continue;
-                if (self.infos.get(std.mem.span(buf)) == null) continue;
-                const app_id = self.allocator.alloc(u8, len) catch {
-                    @panic("out of memory");
-                };
-                @memcpy(app_id, std.mem.span(buf));
-                self.current.append(app_id) catch {
-                    @panic("out of memory");
-                };
-            }
-        }
-        c.g_strfreev(result[i]);
-        const added: u32 = @intCast(self.current.items.len);
-        c.g_list_model_items_changed(g.G_LIST_MODEL(self), 0, removed, added);
-        c.g_object_notify_by_pspec(
-            g.G_OBJECT(self),
-            properties[@intFromEnum(Prop.filter)],
+        self.private().apps = self.private().provider.search(filter, true) catch {
+            @panic("ops");
+        };
+        gio.ListModel.itemsChanged(
+            self.as(gio.ListModel),
+            0,
+            @intCast(removed),
+            @intCast(self.private().apps.data.len),
         );
     }
 };
-
-// NOTE: This is a bad test case as it depends on the apps that are installed on the
-//       machine running it.
-test "must not have leak memory" {
-    const model = try TsModel.new(std.testing.allocator);
-    defer c.g_object_unref(@ptrCast(model));
-    model.setFilter("d");
-    model.setFilter("a");
-}

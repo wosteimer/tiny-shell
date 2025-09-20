@@ -24,7 +24,7 @@
                 <style>
                     <class name="ts-main" />
                 </style>
-                <child>
+                <child> 
                     <object class="AdwToolbarView">
                         <property name="hexpand">true</property>
                         <child type="top">
@@ -45,7 +45,7 @@
                                             swapped="true"
                                         />
                                         <property name="valign">GTK_ALIGN_CENTER</property>
-                                        <property name="placeholder-text">Buscar...</property>
+                                        <property name="placeholder-text" translatable="yes">Search...</property>
                                         <property name="hexpand">true</property>
                                     </object>
                                 </child>
@@ -94,8 +94,8 @@
                                                     <class name="dim-label" />
                                                 </style>
                                                 <property name="icon-name">face-sad-symbolic</property>
-                                                <property name="title">Nenhum Resultado Encontrado</property>
-                                                <property name="description">Tente outra busca</property>
+                                                <property name="title" translatable="yes">No Results Found</property>
+                                                <property name="description" translatable="yes">Try another search</property>
                                             </object>
                                         </property>
                                     </object>

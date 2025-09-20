@@ -1,0 +1,42 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the com.github.wosteimer.tiny-shell package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: com.github.wosteimer.tiny-shell\n"
+"Report-Msgid-Bugs-To: wosteimer1@gmail.com\n"
+"POT-Creation-Date: 2025-08-16 21:11-0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/ts-launcher.zig:53
+msgid "Print program version"
+msgstr ""
+
+#: src/ts-launcher.zig:62
+msgid "Run the program in the background"
+msgstr ""
+
+#: src/ts-list-item.zig:160
+msgid "Open"
+msgstr ""
+
+#: src/data/ui/ts-launcher-window.ui:48
+msgid "Search..."
+msgstr ""
+
+#: src/data/ui/ts-launcher-window.ui:97
+msgid "No Results Found"
+msgstr ""
+
+#: src/data/ui/ts-launcher-window.ui:98
+msgid "Try another search"
+msgstr ""

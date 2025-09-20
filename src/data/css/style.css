@@ -1,19 +1,25 @@
 :root {
     --accent-bg-color: #1e66f5;
     --window-bg-color: #eff1f5;
-    --border-color: #ccd0da;
+    --popover-bg-color: #e6e9ef;
     --accent-fg-color: #4c4f69;
     --window-fg-color: #4c4f69;
-    --scrollbar-outline-color: #11111b;
+    --view-fg-color: #4c4f69;
+    --popover-fg-color: #4c4f69;
+    --scrollbar-outline-color: #dce0e8;
+    --border-color: #ccd0da;
 }
 
 .dark-theme {
     --accent-bg-color: #89b4fa;
     --window-bg-color: #1e1e2e;
-    --border-color: #313244;
+    --popover-bg-color: #181825;
     --accent-fg-color: #cdd6f4;
     --window-fg-color: #cdd6f4;
+    --view-fg-color: #cdd6f4;
+    --popover-fg-color: #cdd6f4;
     --scrollbar-outline-color: #11111b;
+    --border-color: #313244;
 }
 
 @keyframes show {
@@ -38,8 +44,8 @@
         opacity: 1;
     }
 
-    40% {
-        transform: translateY(32px);
+    60% {
+        transform: translateY(64px);
         opacity: 1;
     }
 
@@ -50,7 +56,7 @@
 }
 
 .show {
-    animation: show 300ms ease-in;
+    animation: show 300ms ease;
     transform: translateY(0);
     opacity: 1;
 }
@@ -81,7 +87,6 @@ window {
     border-radius: 18px;
     border: 1px solid var(--border-color);
     padding: 0 12px 0 20px;
-    margin-right: 8px;
 }
 
 .ts-header entry image:last-child {
@@ -92,20 +97,6 @@ window {
 .ts-header entry image {
     margin: 0;
     padding: 0 14px 0 0;
-}
-
-
-.ts-header button {
-    padding: 0;
-    margin: 0;
-    min-width: 32px;
-    min-height: 32px;
-    border-radius: 4px;
-}
-
-
-.ts-header button:hover {
-    background-color: var(--border-color);
 }
 
 button,

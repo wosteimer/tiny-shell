@@ -5,51 +5,41 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(
         .{ .preferred_optimize_mode = .ReleaseFast },
     );
-    const gen_resources_header = b.addSystemCommand(&.{
-        "glib-compile-resources",
-        "--generate-header",
-        "data.gresource.xml",
+
+    const gobject = b.dependency("gobject", .{
+        .target = target,
+        .optimize = optimize,
     });
-    gen_resources_header.setCwd(b.path("data"));
-    const gen_resources_source = b.addSystemCommand(&.{
-        "glib-compile-resources",
-        "--generate-source",
-        "data.gresource.xml",
+
+    const libintl = b.dependency("libintl", .{
+        .target = target,
+        .optimize = optimize,
     });
-    gen_resources_source.setCwd(b.path("data"));
-    gen_resources_source.step.dependOn(&gen_resources_header.step);
-    const ts_launcher = b.addExecutable(.{
-        .name = "ts-launcher",
+
+    const launcher = b.createModule(.{
         .root_source_file = b.path("src/ts-launcher.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-    ts_launcher.addCSourceFile(.{ .file = b.path("data/data.c") });
-    ts_launcher.addIncludePath(b.path("data"));
-    ts_launcher.linkLibC();
-    ts_launcher.linkSystemLibrary("libadwaita-1");
-    ts_launcher.linkSystemLibrary("gtk4");
-    ts_launcher.linkSystemLibrary("gtk4-layer-shell");
-    ts_launcher.linkSystemLibrary("gio-unix-2.0");
-    ts_launcher.step.dependOn(&gen_resources_source.step);
-    b.installArtifact(ts_launcher);
-    const ts_launcher_cmd = b.addRunArtifact(ts_launcher);
-    if (b.args) |args| {
-        ts_launcher_cmd.addArgs(args);
-    }
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&ts_launcher_cmd.step);
-    const ts_model_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/ts-model.zig"),
-        .target = target,
-        .optimize = optimize,
+    launcher.linkSystemLibrary("gtk4", .{});
+    launcher.linkSystemLibrary("gtk4-layer-shell", .{});
+
+    const exe = b.addExecutable(.{
+        .name = "ts-launcher",
+        .root_module = launcher,
     });
-    ts_model_unit_tests.linkLibC();
-    ts_model_unit_tests.linkSystemLibrary("libadwaita-1");
-    ts_model_unit_tests.linkSystemLibrary("gtk4");
-    ts_model_unit_tests.linkSystemLibrary("gtk4-layer-shell");
-    ts_model_unit_tests.linkSystemLibrary("gio-unix-2.0");
-    const run_ts_model_unit_tests = b.addRunArtifact(ts_model_unit_tests);
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_ts_model_unit_tests.step);
+    exe.root_module.addImport("gtk", gobject.module("gtk4"));
+    exe.root_module.addImport("adw", gobject.module("adw1"));
+    exe.root_module.addImport("gio", gobject.module("gio2"));
+    exe.root_module.addImport("gobject", gobject.module("gobject2"));
+    exe.root_module.addImport("glib", gobject.module("glib2"));
+    exe.root_module.addImport("gdk", gobject.module("gdk4"));
+    exe.root_module.addImport("libintl", libintl.module("libintl"));
+    exe.root_module.addImport("graphene", gobject.module("graphene1"));
+    b.installArtifact(exe);
+
+    const run_exe = b.addRunArtifact(exe);
+    const run_step = b.step("run", "Run the application");
+    run_step.dependOn(&run_exe.step);
 }

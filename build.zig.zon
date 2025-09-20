@@ -23,6 +23,9 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .gobject = .{
+            .path = "deps/gobject",
+        },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
         //    // When updating this field to a new URL, be sure to delete the corresponding
@@ -51,6 +54,10 @@
         //    // actually used.
         //    .lazy = false,
         //},
+        .libintl = .{
+            .url = "git+https://github.com/ianprime0509/zig-libintl.git#99ed7bde57400894ef90a2fdeb45518bf1f975c8",
+            .hash = "libintl-0.0.0-ZIc29-glAAAkl5EQRCaI0_Qc5JHTLVhzgs6wQ8tJQmNt",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.

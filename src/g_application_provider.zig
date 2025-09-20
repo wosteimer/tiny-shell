@@ -50,7 +50,7 @@ pub fn getAll(provider: *ApplicationProvider, only_visible: bool) Error!Result([
     var arena = std.heap.ArenaAllocator.init(self.allocator);
     const allocator = arena.allocator();
     const infos = gio.AppInfo.getAll();
-    defer infos.freeFull(@ptrCast(&gio.AppInfo.unref));
+    defer infos.freeFull(@ptrCast(&g.Object.unref));
     var applications = std.ArrayList(Application){};
     defer applications.deinit(self.allocator);
     var current: ?*glib.List = infos;

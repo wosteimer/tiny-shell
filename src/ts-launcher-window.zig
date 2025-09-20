@@ -9,19 +9,15 @@ const graphene = @import("graphene");
 
 const layer = @import("gtk-layer-shell.zig");
 const Application = @import("application_provider.zig").Application;
+const ApplicationProvider = @import("application_provider.zig").ApplicationProvider;
 const TsListItem = @import("ts-list-item.zig").TsListItem;
 const TsModel = @import("ts-model.zig").TsModel;
 const TsModelItem = @import("ts-model.zig").TsModelItem;
-
-const allocator = std.heap.page_allocator;
 
 pub const MoveSelectionDirection = enum(i32) {
     previous = -1,
     next = 1,
 };
-
-const GApplicationProvider = @import("g_application_provider.zig");
-var application_provider = GApplicationProvider.init(allocator);
 
 pub const TsLauncherWindow = extern struct {
     parent: Parent,
@@ -32,6 +28,8 @@ pub const TsLauncherWindow = extern struct {
 
     const Private = struct {
         model: *TsModel,
+        allocator: std.mem.Allocator,
+        application_provider: *ApplicationProvider,
         main: *gtk.Box,
         search_entry: *gtk.SearchEntry,
         list_box: *gtk.ListBox,
@@ -61,6 +59,8 @@ pub const TsLauncherWindow = extern struct {
             inline for (@typeInfo(Private).@"struct".fields) |field| {
                 const name = field.name;
                 comptime if (std.mem.eql(u8, name, "model")) continue;
+                comptime if (std.mem.eql(u8, name, "allocator")) continue;
+                comptime if (std.mem.eql(u8, name, "application_provider")) continue;
                 class.bindTemplateChildPrivate(name, .{});
             }
             inline for (@typeInfo(Self).@"struct".decls) |decl| {
@@ -110,18 +110,6 @@ pub const TsLauncherWindow = extern struct {
         layer.setAnchor(self.as(gtk.Window), .left, true);
         layer.setAnchor(self.as(gtk.Window), .right, true);
         layer.setKeyboardMode(self.as(gtk.Window), .exclusive);
-        self.private().model = TsModel.new(allocator, &application_provider.interface) catch unreachable;
-        const gen = struct {
-            fn createWidget(item: *TsModelItem, _: ?*anyopaque) callconv(.c) *TsListItem {
-                return TsListItem.new(allocator, item) catch unreachable;
-            }
-        };
-        self.private().list_box.bindModel(
-            self.private().model.as(gio.ListModel),
-            @ptrCast(&gen.createWidget),
-            null,
-            null,
-        );
         const shortcut_controller = gtk.ShortcutController.new();
         const text = gtk.Editable.getDelegate(self.private().search_entry.as(gtk.Editable)).?;
         gtk.Widget.addController(text.as(gtk.Widget), shortcut_controller.as(gtk.EventController));
@@ -151,7 +139,6 @@ pub const TsLauncherWindow = extern struct {
         );
         gio.ActionMap.addAction(self.as(gio.ActionMap), launch.as(gio.Action));
         gio.ActionMap.addAction(self.as(gio.ActionMap), launch_action.as(gio.Action));
-        self.reset();
     }
 
     pub fn as(self: *Self, comptime T: type) *T {
@@ -251,8 +238,8 @@ pub const TsLauncherWindow = extern struct {
                 @intCast(pos),
             ).?));
             defer item.unref();
-            const id = allocator.dupeZ(u8, item.getApplication().id) catch unreachable;
-            defer allocator.free(id);
+            const id = self.private().allocator.dupeZ(u8, item.getApplication().id) catch unreachable;
+            defer self.private().allocator.free(id);
             const variant = glib.Variant.newString(id);
             _ = gtk.Widget.activateActionVariant(self.as(gtk.Widget), "win.launch", variant);
         }
@@ -298,7 +285,7 @@ pub const TsLauncherWindow = extern struct {
 
     fn onLaunch(_: *gio.SimpleAction, parameter: *glib.Variant, window: *Self) callconv(.c) void {
         const app_id = parameter.getString(null);
-        application_provider.interface.launch(std.mem.span(app_id)) catch unreachable;
+        window.private().application_provider.launch(std.mem.span(app_id)) catch unreachable;
         window.hide();
     }
 
@@ -307,12 +294,28 @@ pub const TsLauncherWindow = extern struct {
         var it = std.mem.splitSequence(u8, std.mem.span(s_param), "::");
         const app_id = it.next().?;
         const action = it.next().?;
-        application_provider.interface.launchAction(app_id, action) catch unreachable;
+        window.private().application_provider.launchAction(app_id, action) catch unreachable;
         window.hide();
     }
 
-    pub fn new() *Self {
-        return g.ext.newInstance(Self, .{});
+    pub fn new(allocator: std.mem.Allocator, application_provider: *ApplicationProvider) *Self {
+        const self = g.ext.newInstance(Self, .{});
+        self.private().allocator = allocator;
+        self.private().application_provider = application_provider;
+        self.private().model = TsModel.new(self.private().allocator, self.private().application_provider) catch unreachable;
+        const gen = struct {
+            fn createWidget(item: *TsModelItem, user_data: *std.mem.Allocator) callconv(.c) *TsListItem {
+                return TsListItem.new(user_data.*, item) catch unreachable;
+            }
+        };
+        self.private().list_box.bindModel(
+            self.private().model.as(gio.ListModel),
+            @ptrCast(&gen.createWidget),
+            @ptrCast(&self.private().allocator),
+            null,
+        );
+        self.reset();
+        return self;
     }
 
     pub fn show(self: *Self) void {

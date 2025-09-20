@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(
-        .{ .preferred_optimize_mode = .ReleaseFast },
+        .{ .preferred_optimize_mode = .Debug },
     );
 
     const gobject = b.dependency("gobject", .{
@@ -16,18 +16,18 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const launcher = b.createModule(.{
-        .root_source_file = b.path("src/ts-launcher.zig"),
+    const main = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    launcher.linkSystemLibrary("gtk4", .{});
-    launcher.linkSystemLibrary("gtk4-layer-shell", .{});
+    main.linkSystemLibrary("gtk4", .{});
+    main.linkSystemLibrary("gtk4-layer-shell", .{});
 
     const exe = b.addExecutable(.{
-        .name = "ts-launcher",
-        .root_module = launcher,
+        .name = "ts-shell",
+        .root_module = main,
     });
     exe.root_module.addImport("gtk", gobject.module("gtk4"));
     exe.root_module.addImport("adw", gobject.module("adw1"));

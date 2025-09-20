@@ -144,7 +144,7 @@ pub const TsListItem = extern struct {
         return self;
     }
 
-    fn createMenu(allocator: std.mem.Allocator, app: Application) !*gio.MenuModel {
+    fn createMenu(allocator: std.mem.Allocator, app: *Application) !*gio.MenuModel {
         const menu = gio.Menu.new();
         const section_a = gio.Menu.new();
         const section_b = gio.Menu.new();

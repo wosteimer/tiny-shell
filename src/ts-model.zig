@@ -14,8 +14,7 @@ pub const TsModelItem = extern struct {
     pub const Parent = g.Object;
 
     const Private = struct {
-        arena: std.heap.ArenaAllocator,
-        application: Application,
+        application: *Application,
 
         var offset: c_int = 0;
     };
@@ -47,7 +46,6 @@ pub const TsModelItem = extern struct {
     }
 
     fn finalize(self: *Self) callconv(.c) void {
-        self.private().arena.deinit();
         g.Object.virtual_methods.finalize.call(Class.parent, self.as(g.Object));
     }
 
@@ -59,43 +57,10 @@ pub const TsModelItem = extern struct {
         return g.ext.as(T, self);
     }
 
-    pub fn new(allocator: std.mem.Allocator, app: Application) *Self {
+    pub fn new(app: *Application) *Self {
         const self = g.ext.newInstance(TsModelItem, .{});
-        self.private().arena = std.heap.ArenaAllocator.init(allocator);
-        self.private().application = copy(self.private().arena.allocator(), app);
+        self.private().application = app;
         return self;
-    }
-
-    fn copy(allocator: std.mem.Allocator, app: Application) Application {
-        const actions = allocator.alloc(Action, app.actions.len) catch unreachable;
-        for (0..actions.len) |i| {
-            actions[i] = .{
-                .key = allocator.dupeZ(u8, app.actions[i].key) catch unreachable,
-                .name = allocator.dupeZ(u8, app.actions[i].name) catch unreachable,
-            };
-        }
-        var description: ?[]u8 = null;
-        if (app.description) |capture| {
-            description = allocator.dupeZ(u8, capture) catch unreachable;
-        }
-        var commandline: ?[]u8 = null;
-        if (app.commandline) |capture| {
-            commandline = allocator.dupeZ(u8, capture) catch unreachable;
-        }
-        var icon: ?[]u8 = null;
-        if (app.icon) |capture| {
-            icon = allocator.dupeZ(u8, capture) catch unreachable;
-        }
-        return Application{
-            .id = allocator.dupeZ(u8, app.id) catch unreachable,
-            .name = allocator.dupeZ(u8, app.name) catch unreachable,
-            .display_name = allocator.dupeZ(u8, app.display_name) catch unreachable,
-            .description = description,
-            .commandline = commandline,
-            .icon = icon,
-            .actions = actions,
-            .should_show = app.should_show,
-        };
     }
 
     pub fn ref(self: *Self) *TsModelItem {
@@ -106,7 +71,7 @@ pub const TsModelItem = extern struct {
         g.Object.unref(self.as(g.Object));
     }
 
-    pub fn getApplication(self: *Self) Application {
+    pub fn getApplication(self: *Self) *Application {
         return self.private().application;
     }
 };
@@ -222,8 +187,7 @@ pub const TsModel = extern struct {
 
     fn getItem(self: *Self, pos: usize) callconv(.c) *TsModelItem {
         return TsModelItem.new(
-            self.private().allocator,
-            self.private().apps.data[pos],
+            &self.private().apps.data[pos],
         );
     }
 

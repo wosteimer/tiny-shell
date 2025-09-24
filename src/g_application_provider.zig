@@ -1,5 +1,6 @@
 const std = @import("std");
 const gio = @import("gio");
+const giounix = @import("giounix");
 const g = @import("gobject");
 const glib = @import("glib");
 
@@ -36,7 +37,7 @@ pub fn get(provider: *ApplicationProvider, id: []const u8) Error!Result(Applicat
     const allocator = arena.allocator();
     const id_z = try self.allocator.dupeZ(u8, id);
     defer self.allocator.free(id_z);
-    if (gio.DesktopAppInfo.new(id_z)) |app_info| {
+    if (giounix.DesktopAppInfo.new(id_z)) |app_info| {
         return .{
             .arena = arena,
             .data = try self.createApplication(allocator, app_info),
@@ -55,7 +56,7 @@ pub fn getAll(provider: *ApplicationProvider, only_visible: bool) Error!Result([
     defer applications.deinit(self.allocator);
     var current: ?*glib.List = infos;
     while (current != null) : (current = current.?.f_next) {
-        const app_info: *gio.DesktopAppInfo = @ptrCast(@alignCast(current.?.f_data));
+        const app_info: *giounix.DesktopAppInfo = @ptrCast(@alignCast(current.?.f_data));
         const should_show: bool = gio.AppInfo.shouldShow(app_info.as(gio.AppInfo)) != 0;
         if (only_visible and !should_show) continue;
         try applications.append(self.allocator, try self.createApplication(
@@ -84,7 +85,7 @@ pub fn search(
     const allocator = arena.allocator();
     const search_text_z = try self.allocator.dupeZ(u8, search_text);
     defer self.allocator.free(search_text_z);
-    const ids = gio.DesktopAppInfo.search(search_text_z);
+    const ids = giounix.DesktopAppInfo.search(search_text_z);
     defer glib.free(@ptrCast(ids));
     var i: usize = 0;
     var applications = std.ArrayList(Application){};
@@ -93,10 +94,10 @@ pub fn search(
     var pos: usize = 0;
     while (@intFromPtr(ids[i]) != 0) : (i += 1) {
         var j: usize = 0;
-        defer glib.strfreev(ids[i]);
+        defer glib.strfreev(@ptrCast(ids[i]));
         while (@intFromPtr(ids[i][j]) != 0) : (j += 1) {
             const id = ids[i][j];
-            if (gio.DesktopAppInfo.new(id)) |app_info| {
+            if (giounix.DesktopAppInfo.new(id)) |app_info| {
                 defer app_info.unref();
                 const should_show = gio.AppInfo.shouldShow(app_info.as(gio.AppInfo)) != 0;
                 if (only_visible and !should_show) continue;
@@ -108,7 +109,7 @@ pub fn search(
             pos += 1;
         }
     }
-    glib.strfreev(ids[i]);
+    glib.strfreev(@ptrCast(ids[i]));
     return .{
         .arena = arena,
         .data = try allocator.dupe(Application, applications.items),
@@ -119,7 +120,7 @@ pub fn launch(provider: *ApplicationProvider, id: []const u8) Error!void {
     const self: *Self = @alignCast(@fieldParentPtr("interface", provider));
     const id_z = try self.allocator.dupeZ(u8, id);
     defer self.allocator.free(id_z);
-    if (gio.DesktopAppInfo.new(id_z)) |app_info| {
+    if (giounix.DesktopAppInfo.new(id_z)) |app_info| {
         defer app_info.unref();
         _ = gio.AppInfo.launch(app_info.as(gio.AppInfo), null, null, null);
         return;
@@ -133,7 +134,7 @@ pub fn launchAction(provider: *ApplicationProvider, id: []const u8, action: []co
     defer self.allocator.free(id_z);
     const action_z = try self.allocator.dupeZ(u8, action);
     defer self.allocator.free(action_z);
-    if (gio.DesktopAppInfo.new(id_z)) |app_info| {
+    if (giounix.DesktopAppInfo.new(id_z)) |app_info| {
         defer app_info.unref();
         app_info.launchAction(action_z, null);
         return;
@@ -144,7 +145,7 @@ pub fn launchAction(provider: *ApplicationProvider, id: []const u8, action: []co
 fn createApplication(
     self: Self,
     allocator: std.mem.Allocator,
-    app_info: *gio.DesktopAppInfo,
+    app_info: *giounix.DesktopAppInfo,
 ) Error!Application {
     var icon: ?[]const u8 = null;
     if (gio.AppInfo.getIcon(app_info.as(gio.AppInfo))) |capture| {

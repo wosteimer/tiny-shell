@@ -302,7 +302,9 @@ pub const TsLauncherWindow = extern struct {
         const self = g.ext.newInstance(Self, .{});
         self.private().allocator = allocator;
         self.private().application_provider = application_provider;
-        self.private().model = TsModel.new(self.private().allocator, self.private().application_provider) catch unreachable;
+        self.private().model = TsModel.new(allocator, application_provider) catch {
+            unreachable;
+        };
         const gen = struct {
             fn createWidget(item: *TsModelItem, user_data: *std.mem.Allocator) callconv(.c) *TsListItem {
                 return TsListItem.new(user_data.*, item) catch unreachable;

@@ -32,6 +32,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("gtk", gobject.module("gtk4"));
     exe.root_module.addImport("adw", gobject.module("adw1"));
     exe.root_module.addImport("gio", gobject.module("gio2"));
+    exe.root_module.addImport("giounix", gobject.module("giounix2"));
     exe.root_module.addImport("gobject", gobject.module("gobject2"));
     exe.root_module.addImport("glib", gobject.module("glib2"));
     exe.root_module.addImport("gdk", gobject.module("gdk4"));

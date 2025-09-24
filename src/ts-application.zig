@@ -21,6 +21,7 @@ pub const TsApplication = extern struct {
         allocator: std.mem.Allocator,
         application_provider: *ApplicationProvider,
         launcher: *TsLauncherWindow,
+        css: *gtk.CssProvider,
 
         var offset: c_int = 0;
     };
@@ -85,19 +86,22 @@ pub const TsApplication = extern struct {
     }
 
     fn onColorSchemeChanged(
-        settings: *gtk.Settings,
+        self: *Self,
         _: ?*g.ParamSpec,
-        launcher: *TsLauncherWindow,
+        settings: *gtk.Settings,
     ) callconv(.c) void {
         var value = std.mem.zeroes(g.Value);
         defer value.unset();
         g.Object.getProperty(settings.as(g.Object), "gtk-application-prefer-dark-theme", &value);
         const prefer_dark: bool = value.getBoolean() != 0;
+        var theme = std.mem.zeroes(g.Value);
+        _ = g.Value.init(&theme, g.ext.types.@"enum");
         if (prefer_dark) {
-            gtk.Widget.addCssClass(launcher.as(gtk.Widget), "dark-theme");
-            return;
+            theme.setEnum(@intFromEnum(gtk.InterfaceColorScheme.dark));
+        } else {
+            theme.setEnum(@intFromEnum(gtk.InterfaceColorScheme.light));
         }
-        gtk.Widget.removeCssClass(launcher.as(gtk.Widget), "dark-theme");
+        g.Object.setProperty(self.private().css.as(g.Object), "prefers-color-scheme", &theme);
     }
 
     fn onActivate(self: *Self) callconv(.c) void {
@@ -107,7 +111,8 @@ pub const TsApplication = extern struct {
         );
         gtk.Window.setApplication(self.private().launcher.as(gtk.Window), self.as(gtk.Application));
         const css_provider = gtk.CssProvider.new();
-        const display = gdk.Display.getDefault().?;
+        self.private().css = css_provider;
+        const display = gtk.Widget.getDisplay(self.private().launcher.as(gtk.Widget));
         const css: [*:0]const u8 = @embedFile("data/css/style.css");
         css_provider.loadFromString(css);
         gtk.StyleContext.addProviderForDisplay(
@@ -116,14 +121,14 @@ pub const TsApplication = extern struct {
             gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
         const settings = gtk.Settings.getDefault();
-        onColorSchemeChanged(settings.?, null, self.private().launcher);
+        self.onColorSchemeChanged(null, settings.?);
         _ = g.signalConnectData(
             settings.?.as(g.Object),
             "notify::gtk-application-prefer-dark-theme",
             @ptrCast(&onColorSchemeChanged),
-            @ptrCast(self.private().launcher),
+            @ptrCast(self),
             null,
-            .{},
+            .{ .swapped = true },
         );
         self.private().activated = true;
     }

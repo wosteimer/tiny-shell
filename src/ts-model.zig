@@ -87,7 +87,7 @@ pub const TsModel = extern struct {
 
     const Private = struct {
         allocator: std.mem.Allocator,
-        filter: []u8,
+        filter: [:0]const u8,
         provider: *ApplicationProvider,
         apps: ApplicationProvider.Result([]ApplicationProvider.Application),
 
@@ -160,9 +160,7 @@ pub const TsModel = extern struct {
     ) callconv(.c) void {
         switch (@as(Prop, @enumFromInt(property_id))) {
             .filter => {
-                const filter = self.private().allocator.dupeZ(u8, self.getFilter()) catch unreachable;
-                defer self.private().allocator.free(filter);
-                value.setString(filter);
+                value.setString(self.getFilter());
             },
             else => @panic("invalid property id"),
         }
@@ -170,7 +168,7 @@ pub const TsModel = extern struct {
 
     fn setProperty(self: *Self, property_id: u32, value: *const g.Value, _: *g.ParamSpec) callconv(.c) void {
         switch (@as(Prop, @enumFromInt(property_id))) {
-            .filter => self.setFilter(std.mem.span(value.getString() orelse "")),
+            .filter => self.setFilter(value.getString() orelse ""),
             else => @panic("invalid property id"),
         }
     }
@@ -224,21 +222,17 @@ pub const TsModel = extern struct {
         g.Object.unref(self.as(g.Object));
     }
 
-    pub fn getFilter(self: *Self) []const u8 {
-        return @ptrCast(self.private().filter);
+    pub fn getFilter(self: *Self) [*:0]const u8 {
+        return self.private().filter;
     }
 
-    pub fn setFilter(self: *Self, filter: []const u8) void {
+    pub fn setFilter(self: *Self, filter: [*:0]const u8) void {
         const removed = self.private().apps.data.len;
         self.private().allocator.free(self.private().filter);
         self.private().apps.deinit();
-        self.private().filter = self.private().allocator.dupeZ(u8, filter) catch {
-            @panic("ops");
-        };
-        if (std.mem.eql(u8, filter, "")) {
-            self.private().apps = self.private().provider.getAll(true) catch {
-                @panic("ops");
-            };
+        self.private().filter = self.private().allocator.dupeZ(u8, std.mem.span(filter)) catch unreachable;
+        if (std.mem.eql(u8, std.mem.span(filter), "")) {
+            self.private().apps = self.private().provider.getAll(true) catch unreachable;
             gio.ListModel.itemsChanged(
                 self.as(gio.ListModel),
                 0,
@@ -247,9 +241,7 @@ pub const TsModel = extern struct {
             );
             return;
         }
-        self.private().apps = self.private().provider.search(filter, true) catch {
-            @panic("ops");
-        };
+        self.private().apps = self.private().provider.search(std.mem.span(filter), true) catch unreachable;
         gio.ListModel.itemsChanged(
             self.as(gio.ListModel),
             0,

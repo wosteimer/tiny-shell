@@ -10,16 +10,18 @@
     --border-color: #ccd0da;
 }
 
-.dark-theme {
-    --accent-bg-color: #89b4fa;
-    --window-bg-color: #1e1e2e;
-    --popover-bg-color: #181825;
-    --accent-fg-color: #cdd6f4;
-    --window-fg-color: #cdd6f4;
-    --view-fg-color: #cdd6f4;
-    --popover-fg-color: #cdd6f4;
-    --scrollbar-outline-color: #11111b;
-    --border-color: #313244;
+@media (prefers-color-scheme: dark) {
+    :root {
+        --accent-bg-color: #89b4fa;
+        --window-bg-color: #1e1e2e;
+        --popover-bg-color: #181825;
+        --accent-fg-color: #cdd6f4;
+        --window-fg-color: #cdd6f4;
+        --view-fg-color: #cdd6f4;
+        --popover-fg-color: #cdd6f4;
+        --scrollbar-outline-color: #11111b;
+        --border-color: #313244;
+    }
 }
 
 @keyframes show {

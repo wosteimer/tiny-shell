@@ -24,7 +24,7 @@
     // internet connectivity.
     .dependencies = .{
         .gobject = .{
-            .path = "deps/gobject",
+            .path = "deps/bindings",
         },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
